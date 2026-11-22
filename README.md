@@ -1,32 +1,30 @@
 # SHOPMASTER PRO
 
-A responsive business-management starter app for independent shops.
+Billing, inventory and shop management app for small shops (GST invoices, quotations, products, customers, expenses, purchases, reports).
 
-## Included in this first working version
-- Dashboard with sales, invoice, customer and product counts
-- Product and stock list (editable)
-- Customer directory (editable)
-- Shop profile with logo upload and business details
-- Quick draft invoice creation and branded PDF download
-- Payment status tracking
-- Mobile-responsive layout
-- Browser local storage persistence
+## Repository structure
 
-## Run locally
-1. Install Node.js 20 or newer.
-2. Extract this ZIP and open the project folder in a terminal.
-3. Run `npm install`
-4. Run `npm run dev`
-5. Open the local address shown by Vite.
+| Folder | Description |
+|---|---|
+| `web-app/` | Vite + React web version (data in browser localStorage) |
+| `android-native/` | Native Android app (Java, SQLite, PDF share/print) |
+| `sample-data/` | Sample backup JSON (demo data only) |
+| `docs/` | Backup JSON format notes |
 
-## Build
-Run `npm run build`. The production files are created in `dist/`.
+## Run the web app
+```bash
+cd web-app
+npm install
+npm run dev
+```
 
-## Important scope note
-This is the initial UI/prototype milestone. Data is currently stored in the browser on the device. It is **not yet a multi-user cloud SaaS**: users on different devices do not share data, and there is no login, cloud database, role system, subscription billing, GST-compliant invoice validation, or automated backups yet. Do not use it as the sole accounting record system.
+## Build the Android app
+1. Open `android-native/` in Android Studio (Hedgehog or newer).
+2. Install Android SDK Platform 35 and sync Gradle.
+3. Build > Build Bundle(s) / APK(s) > Build APK(s).
 
-## Planned next milestone
-Connect a secure Cloudflare Worker + D1 backend with tenant-isolated shop accounts, authentication, product/customer/invoice APIs, stock ledger, and backups. Then add a proper invoice editor with multiple line items, discounts, round-off, CGST/SGST/IGST, payment entries, purchase bills, supplier records, expenses, reports, and subscription plans.
+## Status
+The native app is a first milestone and not a complete accounting product. See `android-native/README.md` for the list of features and pending work. Test GST calculations with real sample data before business use.
 
-## Suggested GitHub repository
-`shopmaster-pro`
+## Privacy
+Do not commit real backups (customer data, phone numbers, logos). `.gitignore` already excludes `shopmaster-pro-backup-*.json`.

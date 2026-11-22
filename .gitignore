@@ -1,0 +1,22 @@
+# Node / web
+node_modules/
+dist/
+.vite/
+# Android
+*.iml
+.gradle/
+local.properties
+.idea/
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.jks
+*.keystore
+# OS
+.DS_Store
+Thumbs.db
+# Private data - never commit real backups
+shopmaster-pro-backup-*.json
