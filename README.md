@@ -1,23 +1,19 @@
-# SHOPMASTER PRO
+# SHOPMASTER PRO (web)
 
-Billing, inventory and shop management app for small shops (GST invoices, quotations, products, customers, expenses, purchases, reports).
+Vite + React. Data is stored in browser localStorage.
 
-## Structure
-- `src/`, `index.html`, `package.json`, `vite.config.js`: Vite + React web app
-- `android-native/`: Native Android app (Java, SQLite)
-- `docs/`: Documentation
-
-## Run the web app
+## Run
 npm install
 npm run dev
 
-## Build the Android app
-1. Open `android-native/` in Android Studio.
-2. Install Android SDK Platform 35 and sync Gradle.
-3. Build > Build APK(s).
+## Features
+- Home dashboard (sales, purchases, receivables) and bottom tabs: Home, Bills, Products, Parties, More
+- Create Invoice / Quotation (customer, products, GST, bank, signature, notes, terms, payment) with PDF download/print/share
+- Create Purchase (vendor, products, stock increases automatically)
+- Products and Services with categories, HSN/SAC, low-stock alert, image, barcode
+- Customers (with dues) and Vendors
+- Expenses
+- Backup & Restore (single JSON file)
 
-## Status
-The native Android app is a first milestone, not a complete accounting product. Test GST calculations with sample data before business use.
-
-## Privacy
-Never commit real backups (customer data, phone numbers, logos).
+## Not built yet
+Delivery Challan, Credit Note, Sales Order, Reports, Payments ledger, purchase PDF.
