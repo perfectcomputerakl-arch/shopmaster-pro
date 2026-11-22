@@ -1,0 +1,114 @@
+{
+  "businessProfile": {
+    "id": "default",
+    "shopName": "Demo Shop",
+    "ownerName": "Demo Owner",
+    "phone": "0000000000",
+    "email": "demo@example.com",
+    "address": "Demo Address, City",
+    "gstin": "",
+    "state": "Maharashtra",
+    "pinCode": "000000",
+    "logo": "",
+    "termsAndConditions": "1. Goods once sold will not be taken back.\n2. Subject to local jurisdiction.",
+    "bankDetails": "",
+    "upiId": "",
+    "signatureText": "Authorized Signatory"
+  },
+  "appSettings": {
+    "id": "default",
+    "defaultInvoiceTemplate": "Modern",
+    "defaultQuotationTemplate": "Modern",
+    "defaultGstEnabled": true,
+    "defaultGstMode": "CGST_SGST",
+    "thermalWidth": "80mm",
+    "invoicePrefix": "INV",
+    "quotationPrefix": "QTN",
+    "purchasePrefix": "PUR"
+  },
+  "categories": [
+    {
+      "id": "cat-electronics",
+      "name": "Electronics",
+      "description": "Electronic items & accessories",
+      "createdAt": "2026-11-22"
+    },
+    {
+      "id": "cat-general",
+      "name": "General",
+      "description": "General merchandise",
+      "createdAt": "2026-11-22"
+    },
+    {
+      "id": "cat-groceries",
+      "name": "Groceries",
+      "description": "Daily essentials",
+      "createdAt": "2026-11-22"
+    }
+  ],
+  "products": [],
+  "customers": [],
+  "suppliers": [],
+  "invoices": [
+    {
+      "id": "1818cc42-665b-4ed3-a20f-2860409c68b8",
+      "docType": "Tax Invoice",
+      "number": "INV-0001",
+      "date": "2026-11-22",
+      "dueDate": "2026-11-22",
+      "customerId": "",
+      "customerName": "Walk-in Customer",
+      "customerPhone": "",
+      "customerEmail": "",
+      "customerAddress": "",
+      "customerGstin": "",
+      "gstEnabled": true,
+      "gstMode": "CGST_SGST",
+      "subtotal": 14000,
+      "taxAmount": 2520,
+      "cgstAmount": 1260,
+      "sgstAmount": 1260,
+      "igstAmount": 0,
+      "discount": 0,
+      "otherCharges": 0,
+      "grandTotal": 16520,
+      "paidAmount": 0,
+      "balanceAmount": 16520,
+      "paymentMode": "Cash",
+      "status": "Unpaid",
+      "template": "Modern",
+      "notes": "",
+      "terms": "1. Goods once sold will not be taken back.\n2. Subject to local jurisdiction.",
+      "affectsStock": true,
+      "createdAt": "2026-11-22"
+    }
+  ],
+  "invoiceItems": [
+    {
+      "id": "1f4fe276-c407-45ea-860e-7b97807ca9d4",
+      "productId": "",
+      "name": "Billing Software ",
+      "sku": "",
+      "description": "",
+      "image": "",
+      "qty": 1,
+      "unit": "pcs",
+      "rate": 15000,
+      "discount": 1000,
+      "gstPercent": 18,
+      "customGst": false,
+      "taxAmount": 2520,
+      "total": 16520,
+      "invoiceId": "1818cc42-665b-4ed3-a20f-2860409c68b8"
+    }
+  ],
+  "quotations": [],
+  "quotationItems": [],
+  "purchases": [],
+  "purchaseItems": [],
+  "expenses": [],
+  "payments": [],
+  "stockTransactions": [],
+  "customerLedger": [],
+  "supplierLedger": []
+}
