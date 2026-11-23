@@ -86,3 +86,15 @@
 .plan-btn{display:flex;justify-content:center;width:100%;margin-bottom:14px;text-decoration:none}
 .code-input{border:1px solid #d5dde6;border-radius:10px;padding:10px;font-size:15px;text-transform:uppercase}
 .upgrade-banner{display:flex;align-items:center;gap:12px;width:100%;background:#eaf1ff;border:0;border-radius:16px;padding:14px;margin-bottom:16px;color:#1d5cff;cursor:pointer;text-align:left}.upgrade-banner div{flex:1}.upgrade-banner b{display:block}.upgrade-banner small{color:#475569}
+
+/* Plans screen / mobile overflow fixes */
+html,body{max-width:100%;overflow-x:hidden}
+.content,.app-shell,main{min-width:0;max-width:100%}
+.plan-card{min-width:0}.plan-card small{display:block;word-break:break-word}
+.menu-card{overflow-x:auto;min-width:0}
+.plan-table{table-layout:fixed;width:100%}
+.plan-table th:first-child,.plan-table td:first-child{width:46%;word-break:break-word}
+.plan-table th,.plan-table td{font-size:13px;padding:9px 4px;word-break:break-word}
+.plan-table td span{font-size:12px}
+.code-input{text-transform:none;min-width:0;width:100%}
+.menu-card .cb-two{grid-template-columns:minmax(0,1fr) auto!important}
