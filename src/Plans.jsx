@@ -31,7 +31,7 @@ export default function Plans({ plan, isPro, shopName, onTrial, onActivate }) {
         <h4>Have an activation code?</h4>
         <div className="cb-two" style={{ gridTemplateColumns: '1fr auto', gap: 8 }}>
           <input className="code-input" value={code} onChange={e => setCode(e.target.value)} placeholder="Enter code" />
-          <button className="primary" onClick={() => { onActivate(code); setCode(''); }}>Activate</button>
+          <button className="primary" onClick={async () => { await onActivate(code); setCode(''); }}>Activate</button>
         </div>
       </section>
     </>
