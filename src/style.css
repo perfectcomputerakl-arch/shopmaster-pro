@@ -98,3 +98,7 @@ html,body{max-width:100%;overflow-x:hidden}
 .plan-table td span{font-size:12px}
 .code-input{text-transform:none;min-width:0;width:100%}
 .menu-card .cb-two{grid-template-columns:minmax(0,1fr) auto!important}
+.plan-table{white-space:normal}
+.plan-table th,.plan-table td{white-space:normal;overflow-wrap:anywhere;vertical-align:middle;line-height:1.3}
+.plan-table th:first-child,.plan-table td:first-child{width:50%}
+.plan-table th:not(:first-child),.plan-table td:not(:first-child){width:25%}
