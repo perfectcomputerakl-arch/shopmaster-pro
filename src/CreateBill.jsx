@@ -12,21 +12,22 @@ function nextNumber(list, prefix) {
   return `${prefix}-${String(max + 1).padStart(4, '0')}`;
 }
 
-export default function CreateBill({ data, kind, today, onCancel, onSave, addCustomer, addVendor, addProduct, saveProfile, notify }) {
-  const isQuote = kind === 'quotation', isPurchase = kind === 'purchase';
+export default function CreateBill({ data, kind, today, onCancel, onSave, isPro, addCustomer, addVendor, addProduct, saveProfile, notify }) {
+  const isPurchase = kind === 'purchase', isChallan = kind === 'challan', hasPay = kind === 'invoice' || kind === 'purchase';
+  const TITLE = { quotation: 'Quotation', challan: 'Delivery Challan', creditnote: 'Credit Note', salesorder: 'Sales Order', purchase: 'Purchase', invoice: 'Invoice' }[kind] || 'Invoice';
   const P = isPurchase ? 'Vendor' : 'Customer';
   const parties = isPurchase ? (data.extra?.suppliers || []) : data.customers;
   const addParty = isPurchase ? addVendor : addCustomer;
   const bp = data.extra?.businessProfile || {}, st = data.extra?.appSettings || {};
   const docs = isPurchase ? (data.extra?.purchases || []) : data.invoices.filter(i => (i.kind || 'invoice') === kind);
-  const [number, setNumber] = useState(nextNumber(docs, isQuote ? (st.quotationPrefix || 'QTN') : isPurchase ? (st.purchasePrefix || 'PUR') : (st.invoicePrefix || 'INV')));
+  const [number, setNumber] = useState(nextNumber(docs, { quotation: st.quotationPrefix || 'QTN', challan: st.challanPrefix || 'DC', creditnote: st.creditNotePrefix || 'CN', salesorder: st.salesOrderPrefix || 'SO', purchase: st.purchasePrefix || 'PUR' }[kind] || st.invoicePrefix || 'INV'));
   const [date, setDate] = useState(today);
   const [dueDate, setDueDate] = useState(today);
   const [supInv, setSupInv] = useState('');
   const [supInvDate, setSupInvDate] = useState(today);
   const [customer, setCustomer] = useState(null);
   const [items, setItems] = useState([]);
-  const [gstOn, setGstOn] = useState(st.defaultGstEnabled ?? false);
+  const [gstOn, setGstOn] = useState(isChallan ? false : (st.defaultGstEnabled ?? false));
   const [gstMode, setGstMode] = useState(st.defaultGstMode || 'CGST_SGST');
   const [discount, setDiscount] = useState('');
   const [other, setOther] = useState('');
@@ -36,7 +37,7 @@ export default function CreateBill({ data, kind, today, onCancel, onSave, addCus
   const [signature, setSignature] = useState(bp.signatureText || 'Authorized Signatory');
   const [notes, setNotes] = useState('');
   const [terms, setTerms] = useState(bp.termsAndConditions || '');
-  const [template, setTemplate] = useState(String(isQuote ? st.defaultQuotationTemplate || 'Modern' : st.defaultInvoiceTemplate || 'Modern').toLowerCase());
+  const [template, setTemplate] = useState(String(kind === 'quotation' ? st.defaultQuotationTemplate || 'Modern' : st.defaultInvoiceTemplate || 'Modern').toLowerCase());
   const [paidFull, setPaidFull] = useState(false);
   const [paidPart, setPaidPart] = useState('');
   const [sheet, setSheet] = useState(null);
@@ -52,20 +53,20 @@ export default function CreateBill({ data, kind, today, onCancel, onSave, addCus
     return { subtotal, tax, total };
   }, [items, gstOn, discount, other]);
 
-  const dueOf = n => isPurchase ? (data.extra?.purchases || []).filter(p => p.vendorName === n && p.status !== 'Paid').reduce((t, p) => t + num(p.balanceAmount), 0) : data.invoices.filter(i => (i.kind || 'invoice') === 'invoice' && i.customer === n && i.status !== 'Paid').reduce((t, i) => t + num(i.total), 0);
+  const dueOf = n => isPurchase ? (data.extra?.purchases || []).filter(p => p.vendorName === n && p.status !== 'Paid').reduce((t, p) => t + num(p.balanceAmount), 0) : Math.max(0, data.invoices.filter(i => (i.kind || 'invoice') === 'invoice' && i.customer === n && i.status !== 'Paid').reduce((t, i) => t + num(i.total) - num(i.paidAmount), 0) - data.invoices.filter(i => i.kind === 'creditnote' && i.customer === n).reduce((t, i) => t + num(i.total), 0));
   const patch = (key, p) => setItems(list => list.map(x => (x.key === key ? { ...x, ...p } : x)));
   const qtyOf = pid => items.find(x => x.productId === pid)?.qty || 0;
   const setProductQty = (p, delta) => {
     const cur = items.find(x => x.productId === p.id);
-    if (!cur) { if (delta > 0) setItems(l => [...l, { key: uid(), productId: p.id, name: p.name, sku: p.sku || '', qty: 1, unit: p.unit || 'pcs', price: isPurchase ? num(p.purchase) : num(p.price), gst: p.gst === '' || p.gst == null ? 18 : num(p.gst), discount: 0, image: p.image || '' }]); return; }
+    if (!cur) { if (delta > 0) setItems(l => [...l, { key: uid(), productId: p.id, name: p.name, sku: p.sku || '', qty: 1, hsn: p.hsn || '', unit: p.unit || 'pcs', price: isPurchase ? num(p.purchase) : num(p.price), gst: p.gst === '' || p.gst == null ? 18 : num(p.gst), discount: 0, image: p.image || '' }]); return; }
     const nq = num(cur.qty) + delta;
     setItems(l => (nq <= 0 ? l.filter(x => x.key !== cur.key) : l.map(x => (x.key === cur.key ? { ...x, qty: nq } : x))));
   };
   const addCustom = () => {
     if (!custom.name.trim() || num(custom.price) <= 0) { notify('Item ka naam aur rate bharein'); return; }
     let productId = '';
-    if (custom.save) { productId = uid(); addProduct({ id: productId, name: custom.name.trim(), sku: '', category: '', brand: '', description: '', price: isPurchase ? 0 : num(custom.price), purchase: isPurchase ? num(custom.price) : '', stock: '', gst: String(num(custom.gst)), unit: custom.unit || 'pcs', barcode: '', image: '' }); }
-    setItems(l => [...l, { key: uid(), productId, name: custom.name.trim(), sku: '', qty: num(custom.qty) || 1, unit: custom.unit || 'pcs', price: num(custom.price), gst: num(custom.gst), discount: 0, image: '' }]);
+    if (custom.save) { productId = uid(); addProduct({ id: productId, name: custom.name.trim(), sku: '', category: '', brand: '', description: '', hsn: custom.hsn || '', price: isPurchase ? 0 : num(custom.price), purchase: isPurchase ? num(custom.price) : '', stock: '', gst: String(num(custom.gst)), unit: custom.unit || 'pcs', barcode: '', image: '' }); }
+    setItems(l => [...l, { key: uid(), productId, name: custom.name.trim(), sku: '', qty: num(custom.qty) || 1, hsn: custom.hsn || '', unit: custom.unit || 'pcs', price: num(custom.price), gst: num(custom.gst), discount: 0, image: '' }]);
     setCustom(null);
   };
   const saveNewCustomer = () => {
@@ -78,8 +79,8 @@ export default function CreateBill({ data, kind, today, onCancel, onSave, addCus
     if (!items.length) { notify('Kam se kam ek product ya item chunen'); return; }
     if (!number.trim()) { notify('Document number bharein'); return; }
     const tax = gstOn ? calc.tax : 0;
-    const paid = isQuote ? 0 : paidFull ? calc.total : Math.min(calc.total, num(paidPart));
-    const status = isQuote ? 'Quotation' : paid >= calc.total && calc.total > 0 ? 'Paid' : paid > 0 ? 'Partial' : 'Unpaid';
+    const paid = !hasPay ? 0 : paidFull ? calc.total : Math.min(calc.total, num(paidPart));
+    const status = !hasPay ? { quotation: 'Quotation', challan: 'Challan', creditnote: 'Credit Note', salesorder: 'Open' }[kind] : paid >= calc.total && calc.total > 0 ? 'Paid' : paid > 0 ? 'Partial' : 'Unpaid';
     if (saveDefault) saveProfile({ bankDetails, upiId, signatureText: signature, termsAndConditions: terms });
     onSave({
       id: uid(), kind, number: number.trim(), date, dueDate,
@@ -88,7 +89,7 @@ export default function CreateBill({ data, kind, today, onCancel, onSave, addCus
       items: items.map(({ key, ...it }) => ({ ...it, qty: num(it.qty), price: num(it.price), gst: num(it.gst), discount: num(it.discount) })),
       subtotal: calc.subtotal, tax, discount: num(discount), otherCharges: num(other), total: calc.total,
       paidAmount: paid, status, paymentMode: mode, bankDetails, upiId, signature, notes, terms,
-      taxEnabled: gstOn, gstMode, taxRate: num(items[0]?.gst), template
+      placeOfSupply: customer?.state || bp.state || '', taxEnabled: gstOn, gstMode, taxRate: num(items[0]?.gst), template
     });
   };
 
@@ -101,12 +102,12 @@ export default function CreateBill({ data, kind, today, onCancel, onSave, addCus
 
   return (
     <div className="cb-screen">
-      <header className="cb-head"><button className="icon-btn" onClick={onCancel}><ArrowLeft /></button><h2>{isQuote ? 'Create Quotation' : isPurchase ? 'Create Purchase' : 'Create Invoice'}</h2></header>
+      <header className="cb-head"><button className="icon-btn" onClick={onCancel}><ArrowLeft /></button><h2>Create {TITLE}</h2></header>
       <div className="cb-body">
         <section className="cb-card">
-          <div className="cb-two"><label>{isQuote ? 'Quotation No.' : isPurchase ? 'Purchase No.' : 'Invoice No.'}<input value={number} onChange={e => setNumber(e.target.value)} /></label><label>Date<input type="date" value={date} onChange={e => setDate(e.target.value)} /></label></div>
+          <div className="cb-two"><label>{TITLE} No.<input value={number} onChange={e => setNumber(e.target.value)} /></label><label>Date<input type="date" value={date} onChange={e => setDate(e.target.value)} /></label></div>
           {isPurchase && <div className="cb-two"><label>Supplier Invoice No.<input value={supInv} onChange={e => setSupInv(e.target.value)} /></label><label>Supplier Invoice Date<input type="date" value={supInvDate} onChange={e => setSupInvDate(e.target.value)} /></label></div>}
-          {!isQuote && <label>Due Date<input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} /></label>}
+          {hasPay && <label>Due Date<input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} /></label>}
         </section>
 
         <section className="cb-card">
@@ -134,7 +135,7 @@ export default function CreateBill({ data, kind, today, onCancel, onSave, addCus
           <button className="cb-add" onClick={() => setSheet('product')}><Plus size={18} /> {items.length ? 'Add More Products' : 'Select Products'}</button>
         </section>
 
-        <section className="cb-card">
+        <section className="cb-card" style={isChallan ? { display: "none" } : undefined}>
           <h4>Tax</h4>
           <div className="cb-seg"><button className={gstOn ? 'on' : ''} onClick={() => setGstOn(true)}>With GST</button><button className={!gstOn ? 'on' : ''} onClick={() => setGstOn(false)}>Without GST</button></div>
           {gstOn && <div className="cb-seg"><button className={gstMode === 'CGST_SGST' ? 'on' : ''} onClick={() => setGstMode('CGST_SGST')}>CGST + SGST</button><button className={gstMode === 'IGST' ? 'on' : ''} onClick={() => setGstMode('IGST')}>IGST</button></div>}
@@ -147,10 +148,10 @@ export default function CreateBill({ data, kind, today, onCancel, onSave, addCus
           {row(PenLine, 'Signature', signature, () => setSheet('signature'))}
           {row(StickyNote, 'Notes', notes, () => setSheet('notes'))}
           {row(ScrollText, 'Terms & Conditions', terms ? terms.split('\n')[0].slice(0, 40) : '', () => setSheet('terms'))}
-          {!isPurchase && <label>PDF Template<select value={template} onChange={e => setTemplate(e.target.value)}><option value="modern">Modern</option><option value="classic">Classic</option><option value="minimal">Minimal</option></select></label>}
+          {!isPurchase && <label>PDF Template<select value={template} onChange={e => setTemplate(e.target.value)}><option value="modern">Modern</option><option value="classic">Classic</option><option value="minimal">Minimal</option><option value="boxed" disabled={!isPro}>Boxed GST (full borders){isPro ? '' : ' - Pro'}</option><option value="clean" disabled={!isPro}>Clean GST (open layout){isPro ? '' : ' - Pro'}</option><option value="compact" disabled={!isPro}>Compact (services){isPro ? '' : ' - Pro'}</option></select>{!isPro && <small className="muted">Free plan: 3 basic templates and watermark on PDF. Pro mein sab templates, no watermark.</small>}</label>}
         </section>
 
-        {!isQuote && (
+        {hasPay && (
           <section className="cb-card">
             <h4>{isPurchase ? 'Payment to vendor' : 'Payment'}</h4>
             <label className="cb-check"><input type="checkbox" checked={paidFull} onChange={e => setPaidFull(e.target.checked)} /> {isPurchase ? 'Mark as fully paid' : 'Mark as fully paid'} ({mode})</label>
@@ -161,7 +162,7 @@ export default function CreateBill({ data, kind, today, onCancel, onSave, addCus
 
       <footer className="cb-foot">
         <div><small>Total{gstOn ? ` (tax ${money(calc.tax)})` : ''}</small><b>{money(calc.total)}</b></div>
-        <button className="primary" onClick={create}>Create {isQuote ? 'Quotation' : isPurchase ? 'Purchase' : 'Invoice'}</button>
+        <button className="primary" onClick={create}>Create {TITLE}</button>
       </footer>
 
       {sheet && (
@@ -182,7 +183,7 @@ export default function CreateBill({ data, kind, today, onCancel, onSave, addCus
 
             {sheet === 'product' && !custom && <>
               <div className="search-box"><Search size={17} /><input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Search products" /></div>
-              <button className="cb-add" onClick={() => setCustom({ name: '', price: '', qty: 1, unit: 'pcs', gst: 18, save: false })}><Package size={18} /> Add Product / Service</button>
+              <button className="cb-add" onClick={() => setCustom({ name: '', price: '', qty: 1, unit: 'pcs', gst: 18, hsn: '', save: false })}><Package size={18} /> Add Product / Service</button>
               {prods.map(p => (
                 <div className="cb-pick" key={p.id}><div><b>{p.name}</b><small>{money(isPurchase ? p.purchase : p.price)}{p.stock !== '' && p.stock != null ? ` · Stock ${p.stock}` : ''}</small></div>
                   <div className="cb-stepper"><button onClick={() => setProductQty(p, -1)}><Minus size={16} /></button><span>{qtyOf(p.id)}</span><button onClick={() => setProductQty(p, 1)}><Plus size={16} /></button></div></div>
@@ -194,6 +195,7 @@ export default function CreateBill({ data, kind, today, onCancel, onSave, addCus
               <label>Name *<input value={custom.name} onChange={e => setCustom({ ...custom, name: e.target.value })} /></label>
               <div className="cb-two"><label>Rate ₹ *<input type="number" value={custom.price} onChange={e => setCustom({ ...custom, price: e.target.value })} /></label><label>Qty<input type="number" value={custom.qty} onChange={e => setCustom({ ...custom, qty: e.target.value })} /></label></div>
               <div className="cb-two"><label>Unit<input value={custom.unit} onChange={e => setCustom({ ...custom, unit: e.target.value })} /></label><label>GST %<input type="number" value={custom.gst} onChange={e => setCustom({ ...custom, gst: e.target.value })} /></label></div>
+              <label>HSN / SAC (optional)<input value={custom.hsn} onChange={e => setCustom({ ...custom, hsn: e.target.value })} /></label>
               <label className="cb-check"><input type="checkbox" checked={custom.save} onChange={e => setCustom({ ...custom, save: e.target.checked })} /> Products list mein bhi save karein</label>
               <button className="primary" onClick={addCustom}>Add Item</button>
             </>}

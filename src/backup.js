@@ -18,14 +18,14 @@ function docToFile(i, isQuote) {
     gstEnabled: !!i.taxEnabled, gstMode: i.gstMode || 'CGST_SGST', subtotal: num(i.subtotal), taxAmount: tax,
     cgstAmount: cg, sgstAmount: cg, igstAmount: igst, discount: num(i.discount), otherCharges: num(i.otherCharges),
     grandTotal: num(i.total), paidAmount: paidAmt, balanceAmount: num(i.total) - paidAmt,
-    paymentMode: i.paymentMode || 'Cash', terms: i.terms ?? (i._orig?.terms ?? ''), status: i.status, template: cap(i.template || 'modern'), notes: i.notes || ''
+    paymentMode: i.paymentMode || 'Cash', terms: i.terms ?? (i._orig?.terms ?? ''), placeOfSupply: i.placeOfSupply || i._orig?.placeOfSupply || '', status: i.status, template: cap(i.template || 'modern'), notes: i.notes || ''
   };
 }
 function itemsToFile(i, isQuote) {
   return (i.items || []).map((it, n) => {
     const base = num(it.qty) * num(it.price) - num(it.discount), t = base * num(it.gst) / 100;
     return {
-      id: `${i.id}-${n}`, productId: it.productId || '', name: it.name, sku: it.sku || '', description: '',
+      id: `${i.id}-${n}`, productId: it.productId || '', name: it.name, sku: it.sku || '', hsn: it.hsn || '', description: '',
       image: it.image || '', qty: num(it.qty), unit: it.unit || 'pcs', rate: num(it.price), discount: num(it.discount),
       gstPercent: num(it.gst), customGst: false, taxAmount: t, total: base + t,
       [isQuote ? 'quotationId' : 'invoiceId']: i.id
@@ -57,6 +57,7 @@ export function buildBackup(data) {
     invoiceItems: invs.flatMap(i => itemsToFile(i, false)),
     quotations: quos.map(i => docToFile(i, true)),
     quotationItems: quos.flatMap(i => itemsToFile(i, true)),
+    otherDocuments: (data.invoices || []).filter(i => ['challan', 'creditnote', 'salesorder'].includes(i.kind)),
     purchases: x.purchases || [],
     purchaseItems: x.purchaseItems || [],
     expenses: data.expenses || [],
@@ -79,7 +80,7 @@ export function parseBackup(text) {
 
   const toInv = (doc, items, isQuote, idKey) => {
     const its = items.filter(it => it[idKey] === doc.id).map(it => ({
-      productId: it.productId || '', name: it.name || '', sku: it.sku || '', qty: num(it.qty),
+      productId: it.productId || '', name: it.name || '', sku: it.sku || '', hsn: it.hsn || it.hsnCode || '', qty: num(it.qty),
       price: num(it.rate ?? it.price), discount: num(it.discount), gst: num(it.gstPercent ?? it.gst), unit: it.unit || 'pcs', image: it.image || ''
     }));
     return {
@@ -88,7 +89,7 @@ export function parseBackup(text) {
       email: doc.customerEmail || '', address: doc.customerAddress || '', gstin: doc.customerGstin || '',
       items: its, subtotal: num(doc.subtotal), tax: num(doc.taxAmount), discount: num(doc.discount),
       total: num(doc.grandTotal), status: isQuote ? 'Quotation' : (doc.status || 'Unpaid'), notes: doc.notes || '',
-      taxEnabled: !!doc.gstEnabled, gstMode: doc.gstMode || 'CGST_SGST', otherCharges: num(doc.otherCharges), paidAmount: num(doc.paidAmount), paymentMode: doc.paymentMode || 'Cash', terms: doc.terms || '', dueDate: doc.dueDate || doc.date, taxRate: its[0] ? its[0].gst : 0,
+      taxEnabled: !!doc.gstEnabled, gstMode: doc.gstMode || 'CGST_SGST', otherCharges: num(doc.otherCharges), paidAmount: num(doc.paidAmount), paymentMode: doc.paymentMode || 'Cash', terms: doc.terms || '', placeOfSupply: doc.placeOfSupply || '', dueDate: doc.dueDate || doc.date, taxRate: its[0] ? its[0].gst : 0,
       template: String(doc.template || 'Modern').toLowerCase(), _orig: doc
     };
   };
@@ -109,7 +110,8 @@ export function parseBackup(text) {
     customers: arr('customers').map(c => ({ ...c, name: c.name || '', phone: c.phone || '', address: c.address || '' })),
     invoices: [
       ...arr('invoices').map(x => toInv(x, arr('invoiceItems'), false, 'invoiceId')),
-      ...arr('quotations').map(x => toInv(x, arr('quotationItems'), true, 'quotationId'))
+      ...arr('quotations').map(x => toInv(x, arr('quotationItems'), true, 'quotationId')),
+      ...arr('otherDocuments')
     ],
     expenses: arr('expenses').map(e => ({
       ...e, title: e.title ?? e.name ?? e.description ?? 'Expense', amount: num(e.amount),

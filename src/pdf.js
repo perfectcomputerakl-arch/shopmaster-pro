@@ -1,13 +1,16 @@
 import { jsPDF } from 'jspdf';
+import { makeGstPDF } from './pdfGst.js';
+import { docTitle } from './docTitle.js';
 
 const rs = n => 'Rs. ' + Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const COLORS = { classic: [30, 41, 59], modern: [29, 92, 255], minimal: [20, 130, 120] };
 
-export function makeInvoicePDF(inv, shop, bp = {}) {
+async function build(inv, shop, bp = {}) {
   const doc = new jsPDF();
+  if (['boxed', 'clean', 'compact'].includes(inv.template)) return makeGstPDF(doc, inv, shop, bp);
   const color = COLORS[inv.template] || COLORS.modern;
-  const isQuote = inv.kind === 'quotation';
-  const title = isQuote ? 'QUOTATION' : (inv.taxEnabled ? 'TAX INVOICE' : 'INVOICE');
+  const isQuote = (inv.kind || 'invoice') !== 'invoice';
+  const title = docTitle(inv);
   let y = 16;
   const ensure = h => { if (y + h > 280) { doc.addPage(); y = 18; } };
 
@@ -63,5 +66,27 @@ export function makeInvoicePDF(inv, shop, bp = {}) {
   block('Notes', inv.notes);
   block('Terms & Conditions', inv.terms);
   ensure(24); y += 8; doc.line(140, y, 196, y); doc.text(inv.signature || bp.signatureText || 'Authorized Signatory', 168, y + 5, { align: 'center' });
+  return doc;
+}
+
+export function addWatermark(doc, text = 'Created with ShopMaster Pro') {
+  const n = doc.getNumberOfPages();
+  for (let i = 1; i <= n; i++) {
+    doc.setPage(i);
+    doc.saveGraphicsState();
+    doc.setGState(new doc.GState({ opacity: 0.13 }));
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(34); doc.setTextColor(80, 80, 80);
+    const w = doc.getTextWidth(text), a = 35 * Math.PI / 180;
+    doc.text(text, 105 - (w / 2) * Math.cos(a), 150 + (w / 2) * Math.sin(a), { angle: 35 });
+    doc.restoreGraphicsState();
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(110, 110, 110);
+    doc.text('Created with ShopMaster Pro (Free plan)', 105, 295, { align: 'center' });
+  }
+  return doc;
+}
+
+export async function makeInvoicePDF(inv, shop, bp = {}, opts = {}) {
+  const doc = await build(inv, shop, bp);
+  if (opts.watermark) addWatermark(doc);
   return doc;
 }
