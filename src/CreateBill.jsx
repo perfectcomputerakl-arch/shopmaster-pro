@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { ArrowLeft, Plus, Minus, Search, X, User, Package, Trash2, ChevronRight, Landmark, PenLine, StickyNote, ScrollText } from 'lucide-react';
 
-const uid = () => crypto.randomUUID();
+const uid = () => (globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : 'id-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const money = n => '₹' + Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
 const num = v => Number(v) || 0;
 const MODES = ['Cash', 'UPI', 'Bank Transfer', 'Card', 'Cheque'];
@@ -58,7 +58,7 @@ export default function CreateBill({ data, kind, today, onCancel, onSave, isPro,
   const qtyOf = pid => items.find(x => x.productId === pid)?.qty || 0;
   const setProductQty = (p, delta) => {
     const cur = items.find(x => x.productId === p.id);
-    if (!cur) { if (delta > 0) setItems(l => [...l, { key: uid(), productId: p.id, name: p.name, sku: p.sku || '', qty: 1, hsn: p.hsn || '', unit: p.unit || 'pcs', price: isPurchase ? num(p.purchase) : num(p.price), gst: p.gst === '' || p.gst == null ? 18 : num(p.gst), discount: 0, image: p.image || '' }]); return; }
+    if (!cur) { if (delta > 0) setItems(l => [...l, { key: uid(), productId: p.id, name: p.name, sku: p.sku || '', qty: 1, hsn: p.hsn || '', unit: p.unit || 'pcs', price: isPurchase ? num(p.purchase) : num(p.price), gst: p.gst === '' || p.gst == null ? 18 : num(p.gst), discount: 0, image: '' }]); return; }
     const nq = num(cur.qty) + delta;
     setItems(l => (nq <= 0 ? l.filter(x => x.key !== cur.key) : l.map(x => (x.key === cur.key ? { ...x, qty: nq } : x))));
   };
@@ -86,7 +86,7 @@ export default function CreateBill({ data, kind, today, onCancel, onSave, isPro,
       id: uid(), kind, number: number.trim(), date, dueDate,
       customerId: customer?.id || '', customer: customer?.name || (isPurchase ? 'Unknown Vendor' : 'Walk-in Customer'), supplierInvoiceNo: supInv, supplierInvoiceDate: supInvDate, phone: customer?.phone || '', email: customer?.email || '',
       address: customer?.address || '', gstin: customer?.gstin || '',
-      items: items.map(({ key, ...it }) => ({ ...it, qty: num(it.qty), price: num(it.price), gst: num(it.gst), discount: num(it.discount) })),
+      items: items.map(({ key, image, ...it }) => ({ ...it, qty: num(it.qty), price: num(it.price), gst: num(it.gst), discount: num(it.discount) })),
       subtotal: calc.subtotal, tax, discount: num(discount), otherCharges: num(other), total: calc.total,
       paidAmount: paid, status, paymentMode: mode, bankDetails, upiId, signature, notes, terms,
       placeOfSupply: customer?.state || bp.state || '', taxEnabled: gstOn, gstMode, taxRate: num(items[0]?.gst), template
