@@ -1,6 +1,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.jsx';
+import AuthGate from './Auth.jsx';
 import './style.css';
 
 class ErrorBoundary extends React.Component {
@@ -19,4 +20,6 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-createRoot(document.getElementById('root')).render(<ErrorBoundary><App /></ErrorBoundary>);
+createRoot(document.getElementById('root')).render(
+  <ErrorBoundary><AuthGate><App /></AuthGate></ErrorBoundary>
+);
