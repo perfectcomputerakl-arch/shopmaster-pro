@@ -34,6 +34,26 @@ jobs:
       - name: Install project dependencies
         run: npm install
 
+      - name: Diagnose GitHub Variables
+        env:
+          TEST_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          TEST_SUPABASE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          echo "Repository: $GITHUB_REPOSITORY"
+          echo "Branch: $GITHUB_REF_NAME"
+
+          if [ -n "$TEST_SUPABASE_URL" ]; then
+            echo "SUPABASE URL: AVAILABLE"
+          else
+            echo "SUPABASE URL: MISSING"
+          fi
+
+          if [ -n "$TEST_SUPABASE_KEY" ]; then
+            echo "SUPABASE KEY: AVAILABLE"
+          else
+            echo "SUPABASE KEY: MISSING"
+          fi
+
       - name: Build React + Vite with Supabase configuration
         env:
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
