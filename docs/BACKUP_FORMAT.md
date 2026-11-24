@@ -19,3 +19,4 @@ Web app backup file top-level keys:
 - `stockTransactions` (list): (empty in sample)
 - `customerLedger` (list): (empty in sample)
 - `supplierLedger` (list): (empty in sample)
+- `ads` (list): promotional banners (id, title, image, url, enabled, start, end, impressions, clicks)
