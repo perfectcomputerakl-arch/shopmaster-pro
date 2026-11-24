@@ -291,7 +291,21 @@ $('l-csv').onclick = () => {
   const csv = ['Date,Customer,Phone,Plan,Days,Amount,Note,CodeID'].concat(rd(LOG, []).map(e => [new Date(e.at).toISOString().slice(0, 10), e.name, e.phone, e.plan, e.days, e.amount, e.note, e.id].map(q).join(','))).join('\n');
   dl('shopmaster-codes.csv', csv, 'text/csv');
 };
-function dl(name, text, type) { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); }
+function dl(name, text, type) {
+  // Create a real Blob URL and attach the download link to the document.
+  // Appending the link improves compatibility with mobile browsers and embedded pages.
+  const blob = new Blob([text], { type: type || 'application/octet-stream' });
+  const objectUrl = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = objectUrl;
+  a.download = name;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  // Keep the Blob URL alive briefly so the browser can start the download.
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 10000);
+}
 
 // verify
 $('v-btn').onclick = async () => {
@@ -365,7 +379,10 @@ function renderBanners() {
   $('b-list').querySelectorAll('[data-tg]').forEach(b => b.onclick = () => { wr(BAN, bans().map(x => x.id === b.dataset.tg ? { ...x, enabled: !x.enabled } : x)); renderBanners(); });
   $('b-list').querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { if (confirm('Banner delete karein?')) { wr(BAN, bans().filter(x => x.id !== b.dataset.rm)); renderBanners(); } });
 }
-$('b-dl').onclick = () => dl('banners.json', JSON.stringify(bans(), null, 1), 'application/json');
+$('b-dl').onclick = () => {
+  const json = JSON.stringify(bans(), null, 2);
+  dl('banners.json', json, 'application/json;charset=utf-8');
+};
 $('b-import-btn').onclick = () => $('b-import').click();
 $('b-import').onchange = async e => {
   try { const j = JSON.parse(await e.target.files[0].text()); if (!Array.isArray(j)) throw 0; wr(BAN, j); renderBanners(); }
