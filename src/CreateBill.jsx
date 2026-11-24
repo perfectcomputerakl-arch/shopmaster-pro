@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ArrowLeft, Plus, Minus, Search, X, User, Package, Trash2, ChevronRight, Landmark, PenLine, StickyNote, ScrollText } from 'lucide-react';
+import { ArrowLeft, Plus, Minus, Search, X, User, Package, Trash2, ChevronRight, Landmark, PenLine, StickyNote, ScrollText, Mic, MicOff } from 'lucide-react';
 
 const uid = () => (globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : 'id-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const money = n => '₹' + Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
@@ -45,6 +45,8 @@ export default function CreateBill({ data, kind, today, onCancel, onSave, isPro,
   const [newC, setNewC] = useState(null);
   const [custom, setCustom] = useState(null);
   const [saveDefault, setSaveDefault] = useState(true);
+  const [voiceText,setVoiceText]=useState('');
+  const [listening,setListening]=useState(false);
 
   const calc = useMemo(() => {
     let subtotal = 0, tax = 0;
@@ -82,16 +84,28 @@ export default function CreateBill({ data, kind, today, onCancel, onSave, isPro,
     const paid = !hasPay ? 0 : paidFull ? calc.total : Math.min(calc.total, num(paidPart));
     const status = !hasPay ? { quotation: 'Quotation', challan: 'Challan', creditnote: 'Credit Note', salesorder: 'Open' }[kind] : paid >= calc.total && calc.total > 0 ? 'Paid' : paid > 0 ? 'Partial' : 'Unpaid';
     if (saveDefault) saveProfile({ bankDetails, upiId, signatureText: signature, termsAndConditions: terms });
+    const party = customer && !customer.id ? { ...customer, id: uid() } : customer;
+    if (party && !customer?.id) addParty(party);
     onSave({
       id: uid(), kind, number: number.trim(), date, dueDate,
-      customerId: customer?.id || '', customer: customer?.name || (isPurchase ? 'Unknown Vendor' : 'Walk-in Customer'), supplierInvoiceNo: supInv, supplierInvoiceDate: supInvDate, phone: customer?.phone || '', email: customer?.email || '',
-      address: customer?.address || '', gstin: customer?.gstin || '',
+      customerId: party?.id || '', customer: party?.name || (isPurchase ? 'Unknown Vendor' : 'Walk-in Customer'), supplierInvoiceNo: supInv, supplierInvoiceDate: supInvDate, phone: party?.phone || '', email: party?.email || '',
+      address: party?.address || '', gstin: party?.gstin || '',
       items: items.map(({ key, image, ...it }) => ({ ...it, qty: num(it.qty), price: num(it.price), gst: num(it.gst), discount: num(it.discount) })),
       subtotal: calc.subtotal, tax, discount: num(discount), otherCharges: num(other), total: calc.total,
       paidAmount: paid, status, paymentMode: mode, bankDetails, upiId, signature, notes, terms,
-      placeOfSupply: customer?.state || bp.state || '', taxEnabled: gstOn, gstMode, taxRate: num(items[0]?.gst), template
+      placeOfSupply: party?.state || bp.state || '', taxEnabled: gstOn, gstMode, taxRate: num(items[0]?.gst), template
     });
   };
+
+  const applyVoice = (spoken) => {
+    const text=String(spoken||'').trim(); if(!text)return; setVoiceText(text); const lower=text.toLowerCase();
+    const phone=(text.match(/(?:\+?91[\s-]?)?[6-9]\d{9}/)||[])[0]||'';
+    let foundCustomer=parties.find(c=>c.name&&lower.includes(c.name.toLowerCase()));
+    if(foundCustomer)setCustomer(foundCustomer); else { const cleaned=text.replace(phone,'').replace(/\b(customer|mobile|phone|number|bill|invoice|please|add|create)\b/gi,' ').trim(); const name=cleaned.split(/[,;] /)[0].trim(); if(name&&name.length>2&&!/\d{5,}/.test(name))setCustomer({id:'',name,phone,email:'',address:'',gstin:''}); }
+    let matched=0; data.products.forEach(p=>{if(!p.name||!lower.includes(p.name.toLowerCase()))return;const escaped=p.name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');const m=text.match(new RegExp('(?:'+escaped+')\\s*(?:quantity|qty)?\\s*(?:is|of|:)?\\s*(\\d+(?:\\.\\d+)?)','i'))||text.match(new RegExp('(\\d+(?:\\.\\d+)?)\\s*(?:piece|pieces|pcs|unit)?\\s*(?:of)?\\s*'+escaped,'i'));const qty=m?Number(m[1]):1;setItems(list=>{const old=list.find(x=>x.productId===p.id);if(old)return list.map(x=>x.productId===p.id?{...x,qty:num(x.qty)+qty}:{...x});return [...list,{key:uid(),productId:p.id,name:p.name,sku:p.sku||'',qty,hsn:p.hsn||'',unit:p.unit||'pcs',price:isPurchase?num(p.purchase):num(p.price),gst:p.gst==null?18:num(p.gst),discount:0,image:''}]});matched++});
+    notify(matched?`Voice se ${matched} product add hua. Bill check karein.`:'Voice text mil gaya. Customer/product ko manually verify ya select karein.');
+  };
+  const startVoice=()=>{const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR){notify('Is browser mein voice typing support nahi hai. Android Chrome mein try karein.');return}const rec=new SR();rec.lang='hi-IN';rec.interimResults=false;rec.maxAlternatives=1;setListening(true);rec.onresult=e=>applyVoice(e.results[0][0].transcript);rec.onerror=()=>notify('Voice input nahi mila. Microphone permission check karein.');rec.onend=()=>setListening(false);rec.start()};
 
   const prods = data.products.filter(p => `${p.name} ${p.sku} ${p.category}`.toLowerCase().includes(q.toLowerCase()));
   const custs = parties.filter(c => `${c.name} ${c.phone}`.toLowerCase().includes(q.toLowerCase()));
@@ -102,7 +116,8 @@ export default function CreateBill({ data, kind, today, onCancel, onSave, isPro,
 
   return (
     <div className="cb-screen">
-      <header className="cb-head"><button className="icon-btn" onClick={onCancel}><ArrowLeft /></button><h2>Create {TITLE}</h2></header>
+      <header className="cb-head"><button className="icon-btn" onClick={onCancel}><ArrowLeft /></button><h2>Create {TITLE}</h2><button className="secondary" onClick={startVoice}><Mic size={16}/> {listening?'Listening…':'Voice Fill'}</button></header>
+      <section className="cb-card"><small className="muted">Voice example: ‘Rahul 9876543210, Dell Latitude 7490 two pieces’</small>{voiceText&&<p><b>Heard:</b> {voiceText}</p>}<button className="cb-add" onClick={startVoice}>{listening?<MicOff size={18}/>:<Mic size={18}/>} {listening?'Listening…':'Speak customer, mobile, product and quantity'}</button></section>
       <div className="cb-body">
         <section className="cb-card">
           <div className="cb-two"><label>{TITLE} No.<input value={number} onChange={e => setNumber(e.target.value)} /></label><label>Date<input type="date" value={date} onChange={e => setDate(e.target.value)} /></label></div>

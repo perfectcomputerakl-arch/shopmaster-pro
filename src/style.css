@@ -102,3 +102,11 @@ html,body{max-width:100%;overflow-x:hidden}
 .plan-table th,.plan-table td{white-space:normal;overflow-wrap:anywhere;vertical-align:middle;line-height:1.3}
 .plan-table th:first-child,.plan-table td:first-child{width:50%}
 .plan-table th:not(:first-child),.plan-table td:not(:first-child){width:25%}
+
+/* Official Shop Master Pro app logo */
+.brand-icon.app-brand-logo{width:42px;height:42px;overflow:hidden;border-radius:10px;background:#050505;display:flex;align-items:center;justify-content:center;flex:none}
+.brand-icon.app-brand-logo img{width:100%;height:100%;object-fit:cover}
+
+/* loader icon used in Inventory Import */
+.spin{animation:smp-spin 1s linear infinite}
+@keyframes smp-spin{to{transform:rotate(360deg)}}

@@ -1,7 +1,7 @@
 // Backup / Restore helpers. File format = single JSON with these top-level keys:
 // businessProfile, appSettings, categories, products, customers, suppliers, invoices, invoiceItems,
 // quotations, quotationItems, purchases, purchaseItems, expenses, payments, stockTransactions,
-// customerLedger, supplierLedger
+// customerLedger, supplierLedger, ads (promotional banners)
 const EXTRA_KEYS = ['categories','suppliers','purchases','purchaseItems','payments','stockTransactions','customerLedger','supplierLedger'];
 const num = v => Number(v || 0);
 const cap = s => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
@@ -64,7 +64,8 @@ export function buildBackup(data) {
     payments: x.payments || [],
     stockTransactions: x.stockTransactions || [],
     customerLedger: x.customerLedger || [],
-    supplierLedger: x.supplierLedger || []
+    supplierLedger: x.supplierLedger || [],
+    ads: x.ads || []
   };
   return out;
 }
@@ -96,6 +97,7 @@ export function parseBackup(text) {
 
   const extra = { businessProfile: bp, appSettings: d.appSettings || undefined };
   EXTRA_KEYS.forEach(k => { extra[k] = arr(k); });
+  extra.ads = arr('ads');
 
   return {
     shop: { name: bp.shopName || '', phone: bp.phone || '', address: bp.address || '', gstin: bp.gstin || '', email: bp.email || '', logo: bp.logo || '' },
