@@ -25,9 +25,7 @@ Document settings, preferences, invoice template gallery, multiple bank accounts
 ### Integrations
 Payment gateways (Razorpay, Cashfree, PayU), online store, Shopify, Shiprocket, APIs / webhooks, downloads, desktop version
 
-## Advertisement Manager (new in this package)
-- Manage own promotional banner images, title, destination URL, and optional start/end dates.
-- Enable/pause/delete banners from the Advertisements page (also available under More).
-- The first active banner is displayed on the Dashboard; local impression and click counters are recorded.
-- This is a local-device banner manager. It is not yet a cloud-synced multi-admin campaign manager.
-- Google AdMob SDK is not integrated in this web package. Android AdMob App ID, Ad Unit ID, consent flow, and native SDK integration are still required before serving live AdMob ads.
+## Advertisement banners (admin-only)
+- Banners are created ONLY in `admin/admin.html` (Banners tab). Users have no banner panel in the app.
+- Admin downloads `banners.json` and replaces `public/banners.json` in the repo; the app reads it and shows the first active banner on the Dashboard.
+- Per-device impression/click counters were removed (they could not be collected centrally). Google AdMob SDK is not integrated.

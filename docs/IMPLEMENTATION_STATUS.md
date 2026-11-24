@@ -5,7 +5,7 @@
 - Inventory Import: CSV/TSV, XLSX/XLS workbook parsing, multiple image selection with local Tesseract.js English OCR, PDF page rendering + local Tesseract OCR, editable preview, duplicate matching and add/replace/skip stock modes.
 - Existing browser speech-recognition voice fill retained in bill screen. It can recognize spoken text and match product names; recognition support depends on browser/device and language model. Always review before saving.
 - Supabase client initializer and environment configuration; SQL schema for profiles, subscription records, banners, purchase drafts, customers, products, documents and RLS ownership policies.
-- Local promotional banner manager retained.
+- Promotional banners: managed only in admin/admin.html, delivered to the app via public/banners.json.
 - Optional PaddleOCR FastAPI service and Razorpay server starter under `services/`.
 
 ## Not production-complete — do not enable live commerce yet
@@ -13,7 +13,7 @@
 - Subscription enforcement, admin provisioning, trial abuse controls and Razorpay-to-Supabase activation/webhook reconciliation need implementation and security testing. Payment server intentionally marks subscription sync as pending.
 - PaddleOCR service is supplied as a self-hosted backend starter; browser import currently uses Tesseract.js. PaddleOCR is not automatically deployed or connected to the UI.
 - OCR extraction is best-effort English text extraction, not guaranteed invoice/table understanding. Hindi/English mixed OCR and robust line-item mapping need review. OCR output must be checked before import.
-- Google AdMob native SDK and live ad account/unit integration are not included. Existing in-app promotional banners are separate from AdMob.
+- Google AdMob native SDK and live ad account/unit integration are not included. In-app promotional banners are separate from AdMob.
 
 ## Configuration
 - `.env.local` contains the Supabase project URL and publishable key supplied by the owner. Publishable keys are intended for client use only with RLS. Never add Supabase secret/service-role or Razorpay secret keys to Vite variables.
