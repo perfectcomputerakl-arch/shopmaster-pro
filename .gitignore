@@ -4,3 +4,8 @@ android
 .env
 .env.local
 .env.*.local
+
+release-signing/
+*.jks
+*.keystore
+android/app/shopmaster-release.jks
