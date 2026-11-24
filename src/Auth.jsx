@@ -62,7 +62,7 @@ function AuthScreen() {
   return (
     <main style={styles.page}>
       <section style={styles.card}>
-        <div style={styles.logo}>SM</div>
+        <img src="/shopmaster-pro-logo.jpg" alt="ShopMaster Pro" style={styles.logoImage} />
         <div style={styles.brand}>SHOPMASTER PRO</div>
         <div style={styles.subtitle}>BUSINESS MANAGER</div>
         <h1 style={styles.heading}>{mode === 'register' ? 'Create your account' : 'Welcome back'}</h1>
@@ -144,7 +144,7 @@ export default function AuthGate({ children }) {
 const styles = {
   page:{minHeight:'100vh',display:'grid',placeItems:'center',padding:20,background:'linear-gradient(135deg,#eef5f2,#f4f7fb)',fontFamily:'Arial,sans-serif',boxSizing:'border-box'},
   card:{width:'100%',maxWidth:420,background:'#fff',borderRadius:20,padding:28,boxShadow:'0 18px 55px rgba(15,45,35,.12)',boxSizing:'border-box'},
-  logo:{width:54,height:54,borderRadius:16,display:'grid',placeItems:'center',margin:'0 auto 12px',background:'#0b6b50',color:'#fff',fontWeight:900,fontSize:20},
+  logoImage:{display:'block',width:'100%',maxWidth:260,height:'auto',maxHeight:150,objectFit:'contain',margin:'0 auto 12px',borderRadius:10,background:'#000'},
   brand:{textAlign:'center',fontWeight:900,letterSpacing:1.2,color:'#123b30',fontSize:19},
   subtitle:{textAlign:'center',fontSize:10,letterSpacing:3,color:'#718078',marginTop:4},
   heading:{fontSize:24,color:'#172b25',margin:'28px 0 6px'},
