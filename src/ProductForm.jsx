@@ -1,9 +1,13 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Plus, X, Image as ImageIcon } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
+import { ArrowLeft, Plus, X, Image as ImageIcon, Mic, MicOff } from 'lucide-react';
 
 const uid = () => crypto.randomUUID();
 const GST = [0, 0.25, 3, 5, 12, 18, 28];
 const UNITS = ['pcs', 'nos', 'box', 'kg', 'g', 'ltr', 'ml', 'mtr', 'sqft', 'set', 'pair', 'dozen', 'hr', 'day', 'month'];
+
+// Voice typing language. 'en-IN' = English (India) so speech is typed in English letters, not Devanagari.
+const VOICE_LANG = 'en-IN';
 
 function shrink(file, cb) {
   if (!file) return;
@@ -23,6 +27,26 @@ function shrink(file, cb) {
   r.readAsDataURL(file);
 }
 
+// Takes a spoken sentence and pulls out name / price / purchase / stock / gst / hsn.
+// Example: "Dell Latitude 7490 price 25000 purchase 21000 stock 5 gst 18 hsn 8471"
+function parseVoice(text) {
+  let rest = ' ' + String(text || '').replace(/,(?=\d{3})/g, '') + ' ';
+  const out = {};
+  const NUM = '(?:is|of|at|:)?\\s*(?:rs\\.?|rupees|inr|₹)?\\s*(\\d+(?:\\.\\d+)?)';
+  const take = (re, key, conv = Number) => {
+    const m = rest.match(re);
+    if (m) { out[key] = conv(m[1]); rest = rest.replace(m[0], ' '); }
+  };
+  take(new RegExp('\\b(?:purchase\\s*price|purchase|cost\\s*price|cost|buying\\s*price|buying)\\s*' + NUM, 'i'), 'purchase');
+  take(new RegExp('\\b(?:opening\\s*stock|opening\\s*quantity|stock|quantity|qty)\\s*' + NUM, 'i'), 'stock');
+  take(new RegExp('\\b(?:gst|tax)\\s*(?:rate)?\\s*' + NUM, 'i'), 'gst');
+  take(new RegExp('\\b(?:hsn|sac)\\s*(?:code)?\\s*' + NUM, 'i'), 'hsn', String);
+  take(new RegExp('\\b(?:selling\\s*price|price|rate|mrp)\\s*' + NUM, 'i'), 'price');
+  const name = rest.replace(/\b(?:add|create|new|product|service|name)\b/gi, ' ').replace(/[,;]+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (name) out.name = name;
+  return out;
+}
+
 export default function ProductForm({ product, categories, onSave, onAddCategory, onCancel, notify }) {
   const edit = !!product;
   const [f, setF] = useState(product ? { type: 'Product', hsn: '', discount: '', lowStockAlert: '', ...product } : {
@@ -34,11 +58,56 @@ export default function ProductForm({ product, categories, onSave, onAddCategory
     ...(f.lowStockAlert !== '' && f.lowStockAlert != null ? ['low'] : []), ...(f.stock !== '' && f.stock != null ? ['stock'] : [])
   ]));
   const [newCat, setNewCat] = useState(null);
+  const [voiceText, setVoiceText] = useState('');
+  const [listening, setListening] = useState(false);
   const set = (k, v) => setF(x => ({ ...x, [k]: v }));
   const toggle = k => setOpen(s => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
   const svc = f.type === 'Service';
   const gstOptions = GST.includes(Number(f.gst)) ? GST : [...GST, Number(f.gst)];
   const chips = [['image', 'Image'], ['barcode', 'Barcode'], ['discount', 'Discount'], ...(svc ? [] : [['low', 'Low Stock Alert'], ['stock', 'Opening Quantity']])];
+
+  const applyVoice = spoken => {
+    const text = String(spoken || '').trim();
+    if (!text) return;
+    setVoiceText(text);
+    const v = parseVoice(text);
+    const patch = {};
+    if (v.name) patch.name = v.name;
+    if (v.price != null) patch.price = String(v.price);
+    if (v.purchase != null) patch.purchase = String(v.purchase);
+    if (v.gst != null) patch.gst = String(v.gst);
+    if (v.hsn) patch.hsn = v.hsn;
+    if (v.stock != null && !svc) { patch.stock = String(v.stock); setOpen(s => new Set([...s, 'stock'])); }
+    if (!Object.keys(patch).length) { notify('Voice text mil gaya, par kuch samajh nahi aaya. Dobara boliye.'); return; }
+    setF(x => ({ ...x, ...patch }));
+    notify('Voice se details bhar di gayi. Check karke save karein.');
+  };
+
+  const startVoice = async () => {
+    if (listening) return;
+    // Android APK: WebView has no SpeechRecognition, so use the native speech plugin (Google voice dialog).
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const { SpeechRecognition } = await import('@capacitor-community/speech-recognition');
+        const { available } = await SpeechRecognition.available();
+        if (!available) { notify('Is phone me speech service nahi mili. Google app / Speech Services update karein.'); return; }
+        let perm = await SpeechRecognition.checkPermissions();
+        if (perm.speechRecognition !== 'granted') perm = await SpeechRecognition.requestPermissions();
+        if (perm.speechRecognition !== 'granted') { notify('Microphone permission allow karein'); return; }
+        setListening(true);
+        const r = await SpeechRecognition.start({ language: VOICE_LANG, maxResults: 1, prompt: 'Product ka naam, price, stock boliye', partialResults: false, popup: true });
+        if (r?.matches?.[0]) applyVoice(r.matches[0]); else notify('Kuch sunai nahi diya, dobara try karein');
+      } catch (e) { notify('Voice input nahi mila. Microphone permission check karein.'); }
+      finally { setListening(false); }
+      return;
+    }
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { notify('Is browser mein voice typing support nahi hai. Android Chrome mein try karein.'); return; }
+    const rec = new SR(); rec.lang = VOICE_LANG; rec.interimResults = false; rec.maxAlternatives = 1; setListening(true);
+    rec.onresult = e => applyVoice(e.results[0][0].transcript);
+    rec.onerror = () => notify('Voice input nahi mila. Microphone permission check karein.');
+    rec.onend = () => setListening(false); rec.start();
+  };
 
   const addCat = () => {
     const name = (newCat || '').trim();
@@ -58,12 +127,18 @@ export default function ProductForm({ product, categories, onSave, onAddCategory
 
   return (
     <div className="cb-screen">
-      <header className="cb-head"><button className="icon-btn" onClick={onCancel}><ArrowLeft /></button><h2>{edit ? 'Edit' : 'Add'} {svc ? 'Service' : 'Product'}</h2></header>
+      <header className="cb-head"><button className="icon-btn" onClick={onCancel}><ArrowLeft /></button><h2>{edit ? 'Edit' : 'Add'} {svc ? 'Service' : 'Product'}</h2><button className="secondary" onClick={startVoice}><Mic size={16} /> {listening ? 'Listening…' : 'Voice Fill'}</button></header>
       <div className="cb-body">
         <div className="cb-seg" style={{ marginBottom: 12 }}>
           <button className={!svc ? 'on' : ''} onClick={() => set('type', 'Product')}>Product</button>
           <button className={svc ? 'on' : ''} onClick={() => set('type', 'Service')}>Service</button>
         </div>
+
+        <section className="cb-card">
+          <small className="muted">Voice example: ‘Dell Latitude 7490 price 25000 purchase 21000 stock 5 gst 18’</small>
+          {voiceText && <p><b>Heard:</b> {voiceText}</p>}
+          <button className="cb-add" onClick={startVoice}>{listening ? <MicOff size={18} /> : <Mic size={18} />} {listening ? 'Listening…' : 'Speak name, price, stock and GST'}</button>
+        </section>
 
         <section className="cb-card">
           <h4>Details</h4>
