@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { ArrowLeft, Plus, Minus, Search, X, User, Package, Trash2, ChevronRight, Landmark, PenLine, StickyNote, ScrollText, Mic, MicOff } from 'lucide-react';
 
 const uid = () => (globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : 'id-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
@@ -105,7 +106,31 @@ export default function CreateBill({ data, kind, today, onCancel, onSave, isPro,
     let matched=0; data.products.forEach(p=>{if(!p.name||!lower.includes(p.name.toLowerCase()))return;const escaped=p.name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');const m=text.match(new RegExp('(?:'+escaped+')\\s*(?:quantity|qty)?\\s*(?:is|of|:)?\\s*(\\d+(?:\\.\\d+)?)','i'))||text.match(new RegExp('(\\d+(?:\\.\\d+)?)\\s*(?:piece|pieces|pcs|unit)?\\s*(?:of)?\\s*'+escaped,'i'));const qty=m?Number(m[1]):1;setItems(list=>{const old=list.find(x=>x.productId===p.id);if(old)return list.map(x=>x.productId===p.id?{...x,qty:num(x.qty)+qty}:{...x});return [...list,{key:uid(),productId:p.id,name:p.name,sku:p.sku||'',qty,hsn:p.hsn||'',unit:p.unit||'pcs',price:isPurchase?num(p.purchase):num(p.price),gst:p.gst==null?18:num(p.gst),discount:0,image:''}]});matched++});
     notify(matched?`Voice se ${matched} product add hua. Bill check karein.`:'Voice text mil gaya. Customer/product ko manually verify ya select karein.');
   };
-  const startVoice=()=>{const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR){notify('Is browser mein voice typing support nahi hai. Android Chrome mein try karein.');return}const rec=new SR();rec.lang='hi-IN';rec.interimResults=false;rec.maxAlternatives=1;setListening(true);rec.onresult=e=>applyVoice(e.results[0][0].transcript);rec.onerror=()=>notify('Voice input nahi mila. Microphone permission check karein.');rec.onend=()=>setListening(false);rec.start()};
+  const startVoice=async()=>{
+    if(listening)return;
+    // Android APK: WebView has no SpeechRecognition, so use the native speech plugin (Google voice dialog).
+    if(Capacitor.isNativePlatform()){
+      try{
+        const {SpeechRecognition}=await import('@capacitor-community/speech-recognition');
+        const {available}=await SpeechRecognition.available();
+        if(!available){notify('Is phone me speech service nahi mili. Google app / Speech Services update karein.');return}
+        let perm=await SpeechRecognition.checkPermissions();
+        if(perm.speechRecognition!=='granted')perm=await SpeechRecognition.requestPermissions();
+        if(perm.speechRecognition!=='granted'){notify('Microphone permission allow karein');return}
+        setListening(true);
+        const r=await SpeechRecognition.start({language:'hi-IN',maxResults:1,prompt:'Customer, mobile, product aur quantity boliye',partialResults:false,popup:true});
+        if(r?.matches?.[0])applyVoice(r.matches[0]);else notify('Kuch sunai nahi diya, dobara try karein');
+      }catch(e){notify('Voice input nahi mila. Microphone permission check karein.')}
+      finally{setListening(false)}
+      return;
+    }
+    const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if(!SR){notify('Is browser mein voice typing support nahi hai. Android Chrome mein try karein.');return}
+    const rec=new SR();rec.lang='hi-IN';rec.interimResults=false;rec.maxAlternatives=1;setListening(true);
+    rec.onresult=e=>applyVoice(e.results[0][0].transcript);
+    rec.onerror=()=>notify('Voice input nahi mila. Microphone permission check karein.');
+    rec.onend=()=>setListening(false);rec.start();
+  };
 
   const prods = data.products.filter(p => `${p.name} ${p.sku} ${p.category}`.toLowerCase().includes(q.toLowerCase()));
   const custs = parties.filter(c => `${c.name} ${c.phone}`.toLowerCase().includes(q.toLowerCase()));
