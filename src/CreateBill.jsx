@@ -7,6 +7,9 @@ const money = n => '₹' + Number(n || 0).toLocaleString('en-IN', { maximumFract
 const num = v => Number(v) || 0;
 const MODES = ['Cash', 'UPI', 'Bank Transfer', 'Card', 'Cheque'];
 
+// Voice typing language. 'en-IN' = English (India) so speech is typed in English letters, not Devanagari.
+const VOICE_LANG = 'en-IN';
+
 function nextNumber(list, prefix) {
   let max = 0;
   list.forEach(i => { const m = String(i.number || '').match(new RegExp('^' + prefix + '-(\\d+)$')); if (m) max = Math.max(max, Number(m[1])); });
@@ -118,7 +121,7 @@ export default function CreateBill({ data, kind, today, onCancel, onSave, isPro,
         if(perm.speechRecognition!=='granted')perm=await SpeechRecognition.requestPermissions();
         if(perm.speechRecognition!=='granted'){notify('Microphone permission allow karein');return}
         setListening(true);
-        const r=await SpeechRecognition.start({language:'hi-IN',maxResults:1,prompt:'Customer, mobile, product aur quantity boliye',partialResults:false,popup:true});
+        const r=await SpeechRecognition.start({language:VOICE_LANG,maxResults:1,prompt:'Customer, mobile, product aur quantity boliye',partialResults:false,popup:true});
         if(r?.matches?.[0])applyVoice(r.matches[0]);else notify('Kuch sunai nahi diya, dobara try karein');
       }catch(e){notify('Voice input nahi mila. Microphone permission check karein.')}
       finally{setListening(false)}
@@ -126,7 +129,7 @@ export default function CreateBill({ data, kind, today, onCancel, onSave, isPro,
     }
     const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
     if(!SR){notify('Is browser mein voice typing support nahi hai. Android Chrome mein try karein.');return}
-    const rec=new SR();rec.lang='hi-IN';rec.interimResults=false;rec.maxAlternatives=1;setListening(true);
+    const rec=new SR();rec.lang=VOICE_LANG;rec.interimResults=false;rec.maxAlternatives=1;setListening(true);
     rec.onresult=e=>applyVoice(e.results[0][0].transcript);
     rec.onerror=()=>notify('Voice input nahi mila. Microphone permission check karein.');
     rec.onend=()=>setListening(false);rec.start();
