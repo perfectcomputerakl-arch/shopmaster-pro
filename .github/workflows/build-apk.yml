@@ -1,15 +1,72 @@
-name: Build Android APK
+name: Build Signed Release APK
 
+# Capacitor builds the generated `android/` folder (ignored by git). The old hand-written
+# `android-native/` project is NOT used by this workflow.
 on:
   push:
     branches: [main, master]
   workflow_dispatch:
+    inputs:
+      application_id:
+        description: 'Optional: override the Android package id (leave empty to use the ANDROID_APPLICATION_ID variable or capacitor.config.json)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      IN_APP_ID: ${{ inputs.application_id }}
+      VAR_APP_ID: ${{ vars.ANDROID_APPLICATION_ID }}
+      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+      VITE_PAYMENT_API_URL: ${{ vars.VITE_PAYMENT_API_URL }}
     steps:
       - uses: actions/checkout@v4
+
+      # 1. Fail early with a clear message instead of producing a broken or unsigned APK.
+      - name: Check required variables and signing secrets
+        env:
+          S_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          S_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          S_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          S_KEYPASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          missing=""
+          [ -n "$VITE_SUPABASE_URL" ] || missing="$missing VARIABLE:VITE_SUPABASE_URL"
+          [ -n "$VITE_SUPABASE_PUBLISHABLE_KEY" ] || missing="$missing VARIABLE:VITE_SUPABASE_PUBLISHABLE_KEY"
+          [ -n "$S_B64" ] || missing="$missing SECRET:ANDROID_KEYSTORE_BASE64"
+          [ -n "$S_PASS" ] || missing="$missing SECRET:ANDROID_KEYSTORE_PASSWORD"
+          [ -n "$S_ALIAS" ] || missing="$missing SECRET:ANDROID_KEY_ALIAS"
+          [ -n "$S_KEYPASS" ] || missing="$missing SECRET:ANDROID_KEY_PASSWORD"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing:$missing  -> see docs/ANDROID_RELEASE.md (run 'Generate Android Keystore' once to create the secrets)"
+            exit 1
+          fi
+          case "$VITE_SUPABASE_PUBLISHABLE_KEY" in sb_secret_*|eyJ*service_role*) echo "::error::Use the PUBLISHABLE key only, never a secret/service_role key"; exit 1;; esac
+
+      # 2. One single source of truth for the package id and version.
+      - name: Resolve package id and version
+        run: |
+          APP_ID="$IN_APP_ID"
+          [ -n "$APP_ID" ] || APP_ID="$VAR_APP_ID"
+          [ -n "$APP_ID" ] || APP_ID="$(node -p "require('./capacitor.config.json').appId")"
+          if ! echo "$APP_ID" | grep -Eq '^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$'; then
+            echo "::error::Invalid package id: $APP_ID"; exit 1
+          fi
+          VERSION_NAME="$(node -p "require('./package.json').version")"
+          echo "APP_ID=$APP_ID" >> "$GITHUB_ENV"
+          echo "VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
+          echo "VERSION_CODE=${{ github.run_number }}" >> "$GITHUB_ENV"
+          echo "Package id: $APP_ID | version $VERSION_NAME | versionCode ${{ github.run_number }}"
 
       - uses: actions/setup-node@v4
         with:
@@ -20,29 +77,84 @@ jobs:
           distribution: temurin
           java-version: 17
 
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('package.json') }}
+          restore-keys: gradle-${{ runner.os }}-
+
       - name: Install dependencies
         run: npm install
 
+      # 3. Supabase variables are baked into the web bundle here (Vite reads VITE_* at build time).
       - name: Build web app
-        env:
-          # Set in GitHub: Settings > Secrets and variables > Actions > Variables (publishable key only)
-          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
         run: npm run build
 
-      - name: Add Android platform
+      - name: Make the web build use the resolved package id
         run: |
-          npx cap add android
-          npx cap sync android
+          node -e "const f='capacitor.config.json';const c=require('./'+f);c.appId=process.env.APP_ID;require('fs').writeFileSync(f,JSON.stringify(c,null,2)+'\n')"
+          cat capacitor.config.json
 
-      - name: Build debug APK
+      - name: Generate Capacitor Android project
+        run: npx cap add android
+
+      - name: Patch Android project (package id, version, signing, mic, deep link)
+        run: python3 scripts/android/patch_android.py android "$APP_ID" "$VERSION_NAME" "$VERSION_CODE"
+
+      - name: Sync web build into Android
+        run: npx cap sync android
+
+      # 4. Keystore only exists on the runner during the build and is deleted afterwards.
+      - name: Decode keystore
+        env:
+          S_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          echo "$S_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          test -s "$RUNNER_TEMP/release.jks"
+          echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+
+      - name: Build signed release APK
         working-directory: android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew --version
+          ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: Verify signature, package id and version
+        run: |
+          BT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+          APK="$(ls android/app/build/outputs/apk/release/*.apk | head -1)"
+          echo "APK: $APK"
+          "$BT/apksigner" verify --verbose --print-certs "$APK" | tee "$RUNNER_TEMP/sign.txt"
+          grep -q "Verified using v2 scheme (APK Signature Scheme v2): true" "$RUNNER_TEMP/sign.txt" || { echo "::error::APK is not properly signed"; exit 1; }
+          "$BT/aapt2" dump badging "$APK" | grep -E "^package:" | tee "$RUNNER_TEMP/badging.txt"
+          grep -q "name='$APP_ID'" "$RUNNER_TEMP/badging.txt" || { echo "::error::Package id in APK differs from $APP_ID"; exit 1; }
+          mkdir -p release-out
+          cp "$APK" "release-out/ShopMaster-Pro-v${VERSION_NAME}-build${VERSION_CODE}-release.apk"
+          {
+            echo "### ShopMaster Pro release APK"
+            echo "- Package id: \`$APP_ID\`"
+            echo "- Version: \`$VERSION_NAME\` (versionCode \`$VERSION_CODE\`)"
+            echo "- Signing certificate (must be IDENTICAL on every future build):"
+            echo '```'
+            grep -E "certificate SHA-256 digest" "$RUNNER_TEMP/sign.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ShopMaster-Pro-APK
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: ShopMaster-Pro-Release-APK
+          path: release-out/*.apk
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Remove keystore from runner
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks"

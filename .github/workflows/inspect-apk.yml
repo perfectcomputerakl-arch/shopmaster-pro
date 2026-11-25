@@ -1,0 +1,53 @@
+name: Inspect an existing APK (package id + signature)
+
+# Use this BEFORE the first release build to find out which package id your old APK really has.
+# Option A: run_id of an older "Build Android APK" run that still has the artifact "ShopMaster-Pro-APK".
+# Option B: apk_url = a direct download link to any APK.
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'Run id of an older workflow run (number at the end of its URL)'
+        required: false
+        default: ''
+      apk_url:
+        description: 'OR direct https link to an APK file'
+        required: false
+        default: ''
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RUN_ID: ${{ inputs.run_id }}
+      APK_URL: ${{ inputs.apk_url }}
+    steps:
+      - name: Fetch APK
+        run: |
+          mkdir -p in && cd in
+          if [ -n "$RUN_ID" ]; then
+            gh run download "$RUN_ID" --repo "${{ github.repository }}" --name ShopMaster-Pro-APK
+          elif [ -n "$APK_URL" ]; then
+            case "$APK_URL" in https://*) ;; *) echo "::error::Only https links"; exit 1;; esac
+            curl -fsSL "$APK_URL" -o downloaded.apk
+          else
+            echo "::error::Give run_id or apk_url"; exit 1
+          fi
+          find . -name '*.apk'
+      - name: Show package id, version and signing certificate
+        run: |
+          BT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+          APK="$(find in -name '*.apk' | head -1)"
+          {
+            echo "### Old APK details"
+            echo '```'
+            "$BT/aapt2" dump badging "$APK" | grep -E "^package:|application-label:"
+            "$BT/apksigner" verify --print-certs "$APK" | grep -E "certificate (DN|SHA-256)" || true
+            echo '```'
+            echo "Use the package name above as repository variable ANDROID_APPLICATION_ID if you want new builds to keep it."
+          } | tee -a "$GITHUB_STEP_SUMMARY"
