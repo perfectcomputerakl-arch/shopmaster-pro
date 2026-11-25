@@ -1,7 +1,8 @@
 name: Build Signed Release APK
 
 # Capacitor builds the generated `android/` folder (ignored by git). The old hand-written
-# `android-native/` project is NOT used by this workflow.
+# `android-native/` project is NOT used as a project, but its res/ icons are copied in by the
+# "Apply ShopMaster Pro app icon" step below.
 on:
   push:
     branches: [main, master]
@@ -102,6 +103,23 @@ jobs:
 
       - name: Patch Android project (package id, version, signing, mic, deep link)
         run: python3 scripts/android/patch_android.py android "$APP_ID" "$VERSION_NAME" "$VERSION_CODE"
+
+      # Replace Capacitor's default launcher icon with the ShopMaster Pro logo.
+      # Source: android-native/app/src/main/res (mipmap-* icons, adaptive-icon xml, background color).
+      - name: Apply ShopMaster Pro app icon
+        run: |
+          SRC=android-native/app/src/main/res
+          DST=android/app/src/main/res
+          test -f "$SRC/mipmap-xxxhdpi/ic_launcher.png" || { echo "::error::App icon files are missing in $SRC"; exit 1; }
+          find "$DST" -type f -name 'ic_launcher*' -delete
+          for d in mipmap-mdpi mipmap-hdpi mipmap-xhdpi mipmap-xxhdpi mipmap-xxxhdpi mipmap-anydpi-v26; do
+            mkdir -p "$DST/$d"
+            cp "$SRC/$d"/* "$DST/$d"/
+          done
+          mkdir -p "$DST/values"
+          cp "$SRC/values/ic_launcher_background.xml" "$DST/values/"
+          echo "Icons now in $DST:"
+          find "$DST" -type f -name 'ic_launcher*' | sort
 
       - name: Sync web build into Android
         run: npx cap sync android
