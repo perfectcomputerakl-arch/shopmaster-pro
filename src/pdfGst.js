@@ -46,7 +46,18 @@ function image(doc, data, x, y, w, h, align = 'left') {
 
 const wrap = (doc, text, w) => (text ? doc.splitTextToSize(String(text), w) : []);
 const font = (doc, size, style = 'normal', color = BLACK) => { doc.setFontSize(size); doc.setFont('helvetica', style); doc.setTextColor(...color); };
-const spaced = (doc, space, fn) => { doc.setCharSpace?.(space); fn(); doc.setCharSpace?.(0); };
+
+// Letter-spaced text with correct alignment.
+// jsPDF ignores charSpace when it calculates align:'right' / 'center',
+// so we measure the width ourselves and position the text manually.
+const spacedText = (doc, text, x, y, space, align = 'left') => {
+  const str = String(text || '');
+  const w = doc.getTextWidth(str) + space * Math.max(0, str.length - 1);
+  const x0 = align === 'right' ? x - w : align === 'center' ? x - w / 2 : x;
+  doc.setCharSpace?.(space);
+  doc.text(str, x0, y);
+  doc.setCharSpace?.(0);
+};
 
 function shopLines(doc, shop, bp, w) {
   return [
@@ -73,8 +84,8 @@ function boxed(doc, inv, shop, bp, P, qr) {
   const heads = ['#', 'Item', 'HSN/SAC', 'Rate/ Item', 'Qty', 'Taxable Value', 'Tax Amount', 'Amount'];
   let y = 10;
 
-  doc.rect(L, y, W, 8); font(doc, 10, 'bold', NAVY); spaced(doc, 1.6, () => doc.text(P.title, 105, y + 5.5, { align: 'center' }));
-  font(doc, 7.5, 'bold', [60, 60, 60]); spaced(doc, 0.6, () => doc.text('ORIGINAL FOR RECIPIENT', R - 2, y + 5.3, { align: 'right' }));
+  doc.rect(L, y, W, 8); font(doc, 10, 'bold', NAVY); spacedText(doc, P.title, 105, y + 5.5, 1.6, 'center');
+  font(doc, 7.5, 'bold', [60, 60, 60]); spacedText(doc, 'ORIGINAL FOR RECIPIENT', R - 2, y + 5.3, 0.6, 'right');
   y = 18;
   doc.rect(L, y, 95, 30); doc.rect(M, y, 47.5, 15); doc.rect(152.5, y, 47.5, 15); doc.rect(M, y + 15, 47.5, 15); doc.rect(152.5, y + 15, 47.5, 15);
   image(doc, shop.logo, 12, y + 2, 24, 26);
@@ -162,8 +173,8 @@ function boxed(doc, inv, shop, bp, P, qr) {
 function clean(doc, inv, shop, bp, P, qr) {
   let y = 14;
   const ensure = h => { if (y + h > 280) { doc.addPage(); y = 16; } };
-  font(doc, 11, 'bold', NAVY); spaced(doc, 1.8, () => doc.text(P.title, 14, y));
-  font(doc, 7.5, 'bold', [70, 70, 70]); spaced(doc, 0.7, () => doc.text('ORIGINAL FOR RECIPIENT', 196, y - 1, { align: 'right' }));
+  font(doc, 11, 'bold', NAVY); spacedText(doc, P.title, 14, y, 1.8, 'left');
+  font(doc, 7.5, 'bold', [70, 70, 70]); spacedText(doc, 'ORIGINAL FOR RECIPIENT', 196, y - 1, 0.7, 'right');
   image(doc, shop.logo, 146, y + 2, 50, 22, 'right');
   y += 10; font(doc, 16, 'bold'); doc.text(doc.splitTextToSize(shop.name || 'YOUR SHOP NAME', 125)[0], 14, y); y += 6;
   shopLines(doc, shop, bp, 125).forEach(l => { font(doc, 9, l.b ? 'bold' : 'normal'); doc.text(l.t, 14, y); y += 4.4; });
@@ -225,7 +236,7 @@ function compact(doc, inv, shop, bp, P, qr) {
   let y = 14;
   const ensure = h => { if (y + h > 280) { doc.addPage(); y = 16; } };
   image(doc, shop.logo, 14, 10, 50, 16);
-  font(doc, 12, 'bold', NAVY); spaced(doc, 1.8, () => doc.text(P.title, 196, 16, { align: 'right' }));
+  font(doc, 12, 'bold', NAVY); spacedText(doc, P.title, 196, 16, 1.8, 'right');
   font(doc, 9, 'normal', [70, 70, 70]); doc.text('Invoice #:', 196 - doc.getTextWidth(inv.number || '') - 14, 22); font(doc, 9, 'bold'); doc.text(inv.number || '', 196, 22, { align: 'right' });
   y = 36; font(doc, 13, 'bold'); doc.text(doc.splitTextToSize(shop.name || 'YOUR SHOP NAME', 120)[0], 14, y); y += 5.5;
   shopLines(doc, shop, bp, 120).forEach(l => { font(doc, 9, l.b ? 'bold' : 'normal'); doc.text(l.t, 14, y); y += 4.4; });
@@ -278,4 +289,5 @@ export async function makeGstPDF(doc, inv, shop, bp) {
   (t === 'boxed' ? boxed : t === 'clean' ? clean : compact)(doc, inv, shop, bp, P, qr);
   footers(doc, shop);
   return doc;
-}
+    }
+                                                                  
