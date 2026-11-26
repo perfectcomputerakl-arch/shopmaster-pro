@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
-import { ArrowLeft, Plus, Minus, Search, X, User, Package, Trash2, ChevronRight, Landmark, PenLine, StickyNote, ScrollText, Mic, MicOff } from 'lucide-react';
+import { ArrowLeft, Plus, Minus, Search, X, User, Package, Trash2, ChevronRight, Landmark, PenLine, StickyNote, ScrollText, Mic, MicOff, ScanLine } from 'lucide-react';
 
 const uid = () => (globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : 'id-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const money = n => '₹' + Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
@@ -136,16 +136,35 @@ export default function CreateBill({ data, kind, today, onCancel, onSave, isPro,
   };
 
   const prods = data.products.filter(p => `${p.name} ${p.sku} ${p.category} ${p.barcode || ''}`.toLowerCase().includes(q.toLowerCase()));
-  // Barcode scanner (USB/Bluetooth) types the code + Enter: exact barcode/SKU match adds the item automatically.
+  // Barcode: exact barcode/SKU match adds the item. Used by USB/Bluetooth scanner (Enter) and by APK camera scan.
+  const addByCode = raw => {
+    const code = String(raw || '').trim().toLowerCase();
+    if (!code) return false;
+    const hit = data.products.find(p => (p.barcode && String(p.barcode).trim().toLowerCase() === code) || (p.sku && String(p.sku).trim().toLowerCase() === code));
+    if (hit) { setProductQty(hit, 1); setQ(''); notify(hit.name + ' add hua'); return true; }
+    notify('Is barcode ka product nahi mila: ' + raw);
+    return false;
+  };
   const scanEnter = e => {
     if (e.key !== 'Enter') return;
     e.preventDefault();
-    const code = q.trim().toLowerCase();
-    if (!code) return;
-    const hit = data.products.find(p => (p.barcode && String(p.barcode).trim().toLowerCase() === code) || (p.sku && String(p.sku).trim().toLowerCase() === code));
-    if (hit) { setProductQty(hit, 1); setQ(''); notify(hit.name + ' add hua'); }
-    else if (prods.length === 1) { setProductQty(prods[0], 1); setQ(''); }
-    else notify('Is barcode ka product nahi mila');
+    if (!addByCode(q) && prods.length === 1) { setProductQty(prods[0], 1); setQ(''); }
+  };
+  // Camera scan (Android APK only) using Google ML Kit.
+  const cameraScan = async () => {
+    if (!Capacitor.isNativePlatform()) { notify('Camera scan sirf APK me chalta hai'); return; }
+    try {
+      const { BarcodeScanner } = await import('@capacitor-mlkit/barcode-scanning');
+      try {
+        const { available } = await BarcodeScanner.isGoogleBarcodeScannerModuleAvailable();
+        if (!available) { notify('Scanner module download ho raha hai, thodi der ruk kar dobara dabayein'); await BarcodeScanner.installGoogleBarcodeScannerModule(); return; }
+      } catch (_) { /* older Play services: try scan anyway */ }
+      const { barcodes } = await BarcodeScanner.scan();
+      if (barcodes?.[0]?.rawValue) addByCode(barcodes[0].rawValue);
+    } catch (e) {
+      const m = String(e?.message || e);
+      if (!/cancel/i.test(m)) notify('Camera scan nahi ho paya. Camera permission aur Google Play Services check karein.');
+    }
   };
   const custs = parties.filter(c => `${c.name} ${c.phone}`.toLowerCase().includes(q.toLowerCase()));
   const row = (Icon, label, value, onClick) => (
@@ -236,7 +255,7 @@ export default function CreateBill({ data, kind, today, onCancel, onSave, isPro,
             </>}
 
             {sheet === 'product' && !custom && <>
-              <div className="search-box"><Search size={17} /><input autoFocus value={q} onChange={e => setQ(e.target.value)} onKeyDown={scanEnter} placeholder="Search products / scan barcode" /></div>
+              <div className="search-box"><Search size={17} /><input autoFocus value={q} onChange={e => setQ(e.target.value)} onKeyDown={scanEnter} placeholder="Search products / scan barcode" />{Capacitor.isNativePlatform() && <button type="button" className="icon-btn" onClick={cameraScan} aria-label="Scan barcode"><ScanLine size={20} /></button>}</div>
               <button className="cb-add" onClick={() => setCustom({ name: '', price: '', qty: 1, unit: 'pcs', gst: 18, hsn: '', save: false })}><Package size={18} /> Add Product / Service</button>
               {prods.map(p => (
                 <div className="cb-pick" key={p.id}><div><b>{p.name}</b><small>{money(isPurchase ? p.purchase : p.price)}{p.stock !== '' && p.stock != null ? ` · Stock ${p.stock}` : ''}</small></div>
