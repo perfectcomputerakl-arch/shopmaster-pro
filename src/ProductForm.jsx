@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Capacitor } from '@capacitor/core';
-import { ArrowLeft, Plus, X, Image as ImageIcon, Mic, MicOff } from 'lucide-react';
+import { ArrowLeft, Plus, X, Image as ImageIcon, Mic, MicOff, ScanLine } from 'lucide-react';
 
 const uid = () => crypto.randomUUID();
 const GST = [0, 0.25, 3, 5, 12, 18, 28];
@@ -61,6 +61,22 @@ export default function ProductForm({ product, categories, onSave, onAddCategory
   const [voiceText, setVoiceText] = useState('');
   const [listening, setListening] = useState(false);
   const set = (k, v) => setF(x => ({ ...x, [k]: v }));
+  // Camera barcode scan (Android APK) using Google ML Kit; fills the Barcode field.
+  const scanBarcode = async () => {
+    if (!Capacitor.isNativePlatform()) { notify('Camera scan sirf APK me chalta hai. Scanner device se bhi code bhar sakte hain.'); return; }
+    try {
+      const { BarcodeScanner } = await import('@capacitor-mlkit/barcode-scanning');
+      try {
+        const { available } = await BarcodeScanner.isGoogleBarcodeScannerModuleAvailable();
+        if (!available) { notify('Scanner module download ho raha hai, thodi der ruk kar dobara dabayein'); await BarcodeScanner.installGoogleBarcodeScannerModule(); return; }
+      } catch (_) { /* older Play services: try scan anyway */ }
+      const { barcodes } = await BarcodeScanner.scan();
+      const v = barcodes?.[0]?.rawValue;
+      if (v) { set('barcode', v); notify('Barcode mil gaya: ' + v); }
+    } catch (e) {
+      if (!/cancel/i.test(String(e?.message || e))) notify('Camera scan nahi ho paya. Camera permission aur Google Play Services check karein.');
+    }
+  };
   const toggle = k => setOpen(s => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
   const svc = f.type === 'Service';
   const gstOptions = GST.includes(Number(f.gst)) ? GST : [...GST, Number(f.gst)];
@@ -179,7 +195,7 @@ export default function ProductForm({ product, categories, onSave, onAddCategory
               {f.image && <button className="text-btn" onClick={() => set('image', '')}>Remove</button>}
             </div>
           )}
-          {open.has('barcode') && <label>Barcode / Model No.<input value={f.barcode} onChange={e => set('barcode', e.target.value)} /></label>}
+          {open.has('barcode') && <label>Barcode / Model No.<div style={{ display: 'flex', gap: 8, alignItems: 'stretch', marginTop: 7 }}><input style={{ flex: 1, margin: 0 }} value={f.barcode} onChange={e => set('barcode', e.target.value)} placeholder="Type, scanner se ya camera se" /><button type="button" className="secondary" onClick={scanBarcode} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}><ScanLine size={18} /> Scan</button></div></label>}
           {open.has('discount') && <label>Default Discount %<input type="number" min="0" value={f.discount} onChange={e => set('discount', e.target.value)} /></label>}
           {!svc && open.has('low') && <label>Low Stock Alert at (qty)<input type="number" min="0" value={f.lowStockAlert} onChange={e => set('lowStockAlert', e.target.value)} /></label>}
           {!svc && open.has('stock') && <label>Opening Quantity<input type="number" value={f.stock} onChange={e => set('stock', e.target.value)} /></label>}
