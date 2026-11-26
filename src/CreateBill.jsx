@@ -135,7 +135,18 @@ export default function CreateBill({ data, kind, today, onCancel, onSave, isPro,
     rec.onend=()=>setListening(false);rec.start();
   };
 
-  const prods = data.products.filter(p => `${p.name} ${p.sku} ${p.category}`.toLowerCase().includes(q.toLowerCase()));
+  const prods = data.products.filter(p => `${p.name} ${p.sku} ${p.category} ${p.barcode || ''}`.toLowerCase().includes(q.toLowerCase()));
+  // Barcode scanner (USB/Bluetooth) types the code + Enter: exact barcode/SKU match adds the item automatically.
+  const scanEnter = e => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const code = q.trim().toLowerCase();
+    if (!code) return;
+    const hit = data.products.find(p => (p.barcode && String(p.barcode).trim().toLowerCase() === code) || (p.sku && String(p.sku).trim().toLowerCase() === code));
+    if (hit) { setProductQty(hit, 1); setQ(''); notify(hit.name + ' add hua'); }
+    else if (prods.length === 1) { setProductQty(prods[0], 1); setQ(''); }
+    else notify('Is barcode ka product nahi mila');
+  };
   const custs = parties.filter(c => `${c.name} ${c.phone}`.toLowerCase().includes(q.toLowerCase()));
   const row = (Icon, label, value, onClick) => (
     <button className="cb-row" onClick={onClick}><Icon size={19} /><div><small>{label}</small><b>{value || '—'}</b></div><ChevronRight size={18} /></button>
@@ -225,7 +236,7 @@ export default function CreateBill({ data, kind, today, onCancel, onSave, isPro,
             </>}
 
             {sheet === 'product' && !custom && <>
-              <div className="search-box"><Search size={17} /><input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Search products" /></div>
+              <div className="search-box"><Search size={17} /><input autoFocus value={q} onChange={e => setQ(e.target.value)} onKeyDown={scanEnter} placeholder="Search products / scan barcode" /></div>
               <button className="cb-add" onClick={() => setCustom({ name: '', price: '', qty: 1, unit: 'pcs', gst: 18, hsn: '', save: false })}><Package size={18} /> Add Product / Service</button>
               {prods.map(p => (
                 <div className="cb-pick" key={p.id}><div><b>{p.name}</b><small>{money(isPurchase ? p.purchase : p.price)}{p.stock !== '' && p.stock != null ? ` · Stock ${p.stock}` : ''}</small></div>
