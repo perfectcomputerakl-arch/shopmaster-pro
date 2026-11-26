@@ -72,6 +72,16 @@ def patch_manifest(path: Path):
     path.write_text(s)
 
 
+def patch_min_sdk(root: Path):
+    # ML Kit barcode scanner needs minSdkVersion >= 23 (Capacitor default is 22).
+    f = root / "variables.gradle"
+    if f.exists():
+        v = f.read_text()
+        v2 = re.sub(r'minSdkVersion\s*=\s*(\d+)', lambda m: f"minSdkVersion = {max(23, int(m.group(1)))}", v, count=1)
+        if v2 != v:
+            f.write_text(v2)
+
+
 def main():
     if len(sys.argv) != 5:
         die(__doc__)
@@ -87,6 +97,7 @@ def main():
             die(f"{f} not found - did `npx cap add android` run?")
     patch_gradle(gradle, app_id, vname, vcode)
     patch_manifest(manifest)
+    patch_min_sdk(root)
     print(f"Patched {root}: applicationId={app_id} versionName={vname} versionCode={vcode}")
 
 
