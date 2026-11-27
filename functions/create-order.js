@@ -1,83 +1,69 @@
-// ShopMaster Pro - Secure Razorpay Order Creation
-// Cloudflare Pages Function
-
 const PLANS = {
   pro_monthly: {
-    label: "Monthly Pro (30 Days)",
+    name: "PRO Monthly",
     amount: 9900,
-    duration: 30
+    days: 30,
   },
   pro_yearly: {
-    label: "Yearly Pro (365 Days)",
+    name: "PRO Yearly",
     amount: 99900,
-    duration: 365
-  }
+    days: 365,
+  },
 };
-
-function json(data, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: {
-      "Content-Type": "application/json",
-      "Cache-Control": "no-store"
-    }
-  });
-}
 
 export async function onRequestPost({ request, env }) {
   try {
-    // Check required configuration
-    const required = [
-      "RAZORPAY_KEY_ID",
-      "RAZORPAY_KEY_SECRET",
-      "SUPABASE_SERVICE_ROLE_KEY",
-      "VITE_SUPABASE_URL",
-      "VITE_SUPABASE_PUBLISHABLE_KEY"
-    ];
+    // 1. Authentication
+    const authHeader = request.headers.get("Authorization");
 
-    for (const key of required) {
-      if (!env[key]) {
-        return json({ error: `Server configuration missing: ${key}` }, 500);
-      }
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return json({ error: "Please login first." }, 401);
     }
 
-    // Authenticate user
-    const authHeader = request.headers.get("Authorization") || "";
-    const token = authHeader.replace(/^Bearer\s+/i, "");
+    const token = authHeader.substring(7);
 
-    if (!token) {
-      return json({ error: "Please login first" }, 401);
-    }
-
-    const authResponse = await fetch(
-      `${env.VITE_SUPABASE_URL}/auth/v1/user`,
+    // 2. Verify Supabase user
+    const userResponse = await fetch(
+      `${env.SUPABASE_URL}/auth/v1/user`,
       {
         headers: {
-          apikey: env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          Authorization: `Bearer ${token}`
-        }
+          apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${token}`,
+        },
       }
     );
 
-    if (!authResponse.ok) {
-      return json({ error: "Invalid login session" }, 401);
+    if (!userResponse.ok) {
+      return json({ error: "Invalid session. Please login again." }, 401);
     }
 
-    const user = await authResponse.json();
+    const user = await userResponse.json();
 
     if (!user.id) {
-      return json({ error: "User authentication failed" }, 401);
+      return json({ error: "User authentication failed." }, 401);
     }
 
-    // Validate requested plan
+    // 3. Get requested plan
     const body = await request.json();
-    const plan = PLANS[body.plan];
+    const planKey = body.plan_key;
+
+    const plan = PLANS[planKey];
 
     if (!plan) {
-      return json({ error: "Invalid Pro plan selected" }, 400);
+      return json({ error: "Invalid or unavailable plan." }, 400);
     }
 
-    // Create Razorpay order using server-side fixed price
+    // 4. Check configuration
+    if (
+      !env.RAZORPAY_KEY_ID ||
+      !env.RAZORPAY_KEY_SECRET ||
+      !env.SUPABASE_URL ||
+      !env.SUPABASE_SERVICE_ROLE_KEY
+    ) {
+      return json({ error: "Payment configuration missing." }, 500);
+    }
+
+    // 5. Create Razorpay order
     const credentials = btoa(
       `${env.RAZORPAY_KEY_ID}:${env.RAZORPAY_KEY_SECRET}`
     );
@@ -88,17 +74,18 @@ export async function onRequestPost({ request, env }) {
         method: "POST",
         headers: {
           Authorization: `Basic ${credentials}`,
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           amount: plan.amount,
           currency: "INR",
-          receipt: `sm_${crypto.randomUUID().replace(/-/g, "").slice(0, 20)}`,
+          receipt: `sm_${crypto.randomUUID().replace(/-/g, "").slice(0, 32)}`,
           notes: {
-            owner_id: user.id,
-            plan_key: body.plan
-          }
-        })
+            user_id: user.id,
+            plan_key: planKey,
+            plan_name: plan.name,
+          },
+        }),
       }
     );
 
@@ -106,49 +93,63 @@ export async function onRequestPost({ request, env }) {
 
     if (!orderResponse.ok || !order.id) {
       return json({
-        error: order.error?.description || "Razorpay order creation failed"
+        error: order.error?.description || "Razorpay order creation failed.",
       }, 502);
     }
 
-    // Save order in Supabase
+    // 6. Save transaction in Supabase
     const dbResponse = await fetch(
-      `${env.VITE_SUPABASE_URL}/rest/v1/payment_transactions`,
+      `${env.SUPABASE_URL}/rest/v1/payment_transactions`,
       {
         method: "POST",
         headers: {
           apikey: env.SUPABASE_SERVICE_ROLE_KEY,
           Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
           "Content-Type": "application/json",
-          Prefer: "return=minimal"
+          Prefer: "return=minimal",
         },
         body: JSON.stringify({
           owner_id: user.id,
           razorpay_order_id: order.id,
-          plan_key: body.plan,
+          plan_key: planKey,
           amount_paise: plan.amount,
-          currency: "INR",
-          status: "created"
-        })
+          status: "created",
+          signature_verified: false,
+        }),
       }
     );
 
     if (!dbResponse.ok) {
       return json({
-        error: "Payment record save nahi hua. Please try again."
+        error: "Transaction database error. Please contact support.",
       }, 500);
     }
 
+    // 7. Return order details
     return json({
-      orderId: order.id,
-      amount: order.amount,
-      currency: order.currency,
-      keyId: env.RAZORPAY_KEY_ID,
-      label: plan.label
+      success: true,
+      key_id: env.RAZORPAY_KEY_ID,
+      order_id: order.id,
+      amount: plan.amount,
+      currency: "INR",
+      plan_key: planKey,
+      plan_name: plan.name,
+      days: plan.days,
     });
 
   } catch (error) {
     return json({
-      error: error.message || "Server error"
+      error: error.message || "Internal server error.",
     }, 500);
   }
-      }
+}
+
+function json(data, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
+    },
+  });
+}
