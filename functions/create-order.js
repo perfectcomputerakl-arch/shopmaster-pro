@@ -114,7 +114,7 @@ export async function onRequestPost({ request, env }) {
           plan_key: planKey,
           amount_paise: plan.amount,
           status: "created",
-          signature_verified: false,
+          razorpay_signature_verified: false,
         }),
       }
     );
