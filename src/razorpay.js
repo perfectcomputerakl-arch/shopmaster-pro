@@ -1,6 +1,6 @@
 // ShopMaster Pro - Razorpay Configuration
 
-export const RAZORPAY_KEY_ID = "rzp_test_xxxxxxxxxxxxx";
+export const RAZORPAY_KEY_ID = "rzp_test_U52W32sGZQIjSq";
 
 // Razorpay Payment Configuration
 export const RAZORPAY_CONFIG = {
